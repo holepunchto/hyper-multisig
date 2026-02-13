@@ -1,6 +1,6 @@
 {
   "name": "hyper-multisig",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Multisig hypercore and hyperdrive",
   "main": "index.js",
   "files": [
