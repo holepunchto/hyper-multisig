@@ -10,8 +10,8 @@
   "scripts": {
     "format": "prettier --write . && lunte --fix",
     "lint": "prettier --check . && lunte",
-    "test": "brittle-bare -c test.js",
-    "test-node": "brittle -c test.js"
+    "test": "brittle -c test.js",
+    "test-bare": "brittle-bare -c test.js"
   },
   "dependencies": {
     "b4a": "^1.7.4",
