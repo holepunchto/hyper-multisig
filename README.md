@@ -1,6 +1,4 @@
 ![CI](https://github.com/holepunchto/hyper-multisig/actions/workflows/ci.yml/badge.svg)
-![Release](https://github.com/holepunchto/hyper-multisig/actions/workflows/release.yml/badge.svg)
-![Bump Deps](https://github.com/holepunchto/hyper-multisig/actions/workflows/bump-deps.yml/badge.svg)
 
 # hyper-multisig
 
