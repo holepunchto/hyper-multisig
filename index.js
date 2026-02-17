@@ -160,9 +160,7 @@ class HyperMultisig {
     })
 
     if (!force && !skipTargetChecks) {
-      await MultisigUtil.verifyCoreCommitted(core, {
-        peerUpdateTimeout
-      })
+      await MultisigUtil.verifyCoreCommitted(core)
     }
 
     const result = {
@@ -235,14 +233,8 @@ class HyperMultisig {
     )
 
     if (!force && !skipTargetChecks) {
-      await MultisigUtil.verifyCoreCommitted(core, {
-        peerUpdateTimeout,
-        coreId: 'db'
-      })
-      await MultisigUtil.verifyCoreCommitted(blobsCore, {
-        peerUpdateTimeout,
-        coreId: 'blobs'
-      })
+      await MultisigUtil.verifyCoreCommitted(core)
+      await MultisigUtil.verifyCoreCommitted(blobsCore)
     }
 
     const result = {
