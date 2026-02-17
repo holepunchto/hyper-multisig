@@ -634,8 +634,20 @@ test('request core sanity checks throw correct errors', async (t) => {
 
 test('commit core sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
-  const { store, store2, store3, swarm, swarm2, swarm3, multisig, publicKeys, namespace, signers } =
-    await setupTest(t, 4, { numSigners: 1 })
+  const {
+    store,
+    store2,
+    store3,
+    store4,
+    swarm,
+    swarm2,
+    swarm3,
+    swarm4,
+    multisig,
+    publicKeys,
+    namespace,
+    signers
+  } = await setupTest(t, 4, { numSigners: 1 })
 
   const srcCore = store.get({ name: 'srcCore' })
   await srcCore.append('block0')
@@ -722,6 +734,11 @@ test('commit core sanity checks throw correct errors', async (t) => {
   const tgtCopy3 = store3.get(tgtCore.key)
   await tgtCopy3.ready()
   swarm3.join(tgtCopy3.discoveryKey)
+
+  const tgtCopy4 = store4.get(tgtCore.key)
+  await tgtCopy4.ready()
+  swarm4.join(tgtCopy4.discoveryKey)
+
   await MultisigUtil.waitUntilSufficientPeers(tgtCore)
 
   await t.exception(
@@ -734,14 +751,15 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   await tgtCopy2.get(0)
   await tgtCopy3.get(0)
-  await MultisigUtil.waitUntilFullySeeded(tgtCore)
+  await tgtCopy4.get(0)
+
+  const promise = Promise.all([tgtCopy2.get(1), tgtCopy3.get(1), tgtCopy4.get(1)])
 
   await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
 
   // Create a request that would break the multisig core due to incompatible history
   {
-    await tgtCopy2.get(1)
-    await tgtCopy3.get(1)
+    await promise
 
     const badSrcCore = store.get({ name: 'bad-core' })
     await badSrcCore.append('block0')
@@ -953,8 +971,20 @@ test('request drive sanity checks throw correct errors', async (t) => {
 
 test('commit drive sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
-  const { store, store2, store3, swarm, swarm2, swarm3, multisig, publicKeys, namespace, signers } =
-    await setupTest(t, 4, { numSigners: 1 })
+  const {
+    store,
+    store2,
+    store3,
+    store4,
+    swarm,
+    swarm2,
+    swarm3,
+    swarm4,
+    multisig,
+    publicKeys,
+    namespace,
+    signers
+  } = await setupTest(t, 4, { numSigners: 1 })
 
   const srcDrive = new Hyperdrive(store)
   await srcDrive.put('/file', 'content')
@@ -1073,6 +1103,11 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   const tgtCopy3 = new Hyperdrive(store3, tgtDbCore.key)
   await tgtCopy3.ready()
   swarm3.join(tgtCopy3.discoveryKey)
+
+  const tgtCopy4 = new Hyperdrive(store4, tgtDbCore.key)
+  await tgtCopy4.ready()
+  swarm4.join(tgtCopy4.discoveryKey)
+
   await MultisigUtil.waitUntilSufficientPeers(tgtDrive.db.core)
   await MultisigUtil.waitUntilSufficientPeers(tgtDrive.blobs.core)
 
@@ -1088,6 +1123,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   for (let i = 0; i < tgtDrive.db.core.length; i++) {
     await tgtCopy2.db.core.get(i)
     await tgtCopy3.db.core.get(i)
+    await tgtCopy4.db.core.get(i)
   }
   await MultisigUtil.waitUntilFullySeeded(tgtDrive.db.core)
 
@@ -1101,14 +1137,23 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   await tgtCopy2.get('/file')
   await tgtCopy3.get('/file')
+  await tgtCopy4.get('/file')
   await MultisigUtil.waitUntilFullySeeded(tgtDrive.blobs.core)
+
+  const promise = Promise.all([
+    tgtCopy2.db.core.get(tgtDrive.db.core.length),
+    tgtCopy3.db.core.get(tgtDrive.db.core.length),
+    tgtCopy4.db.core.get(tgtDrive.db.core.length),
+    tgtCopy2.blobs.core.get(tgtDrive.blobs.core.length),
+    tgtCopy3.blobs.core.get(tgtDrive.blobs.core.length),
+    tgtCopy4.blobs.core.get(tgtDrive.blobs.core.length)
+  ])
 
   await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
 
   // Create a request that would break the multisig due to incompatible history
   {
-    await tgtCopy2.checkout(tgtDrive.version).get('/file2')
-    await tgtCopy3.checkout(tgtDrive.version).get('/file2')
+    await promise
 
     const badSrcDrive = new Hyperdrive(store.namespace('other'))
     await badSrcDrive.put('/file', 'bad')

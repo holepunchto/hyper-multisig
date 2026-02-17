@@ -158,6 +158,13 @@ class HyperMultisig {
       end: length,
       commit: !dryRun
     })
+
+    if (!force && !skipTargetChecks) {
+      await MultisigUtil.verifyCoreCommitted(core, {
+        peerUpdateTimeout
+      })
+    }
+
     const result = {
       destCore: await MultisigUtil.getCoreInfo(core),
       srcCore: await MultisigUtil.getCoreInfo(srcCore),
@@ -226,6 +233,18 @@ class HyperMultisig {
       blobsSignatures,
       { end: length, blobsEnd: blobsLength, commit: !dryRun }
     )
+
+    if (!force && !skipTargetChecks) {
+      await MultisigUtil.verifyCoreCommitted(core, {
+        peerUpdateTimeout,
+        coreId: 'db'
+      })
+      await MultisigUtil.verifyCoreCommitted(blobsCore, {
+        peerUpdateTimeout,
+        coreId: 'blobs'
+      })
+    }
+
     const result = {
       db: {
         destCore: await MultisigUtil.getCoreInfo(core),
