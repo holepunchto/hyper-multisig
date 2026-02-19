@@ -726,9 +726,9 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   const { core: tgtCore } = await commitPromise
 
-  tgtSwarm1.suspend()
-  tgtSwarm2.suspend()
-  tgtSwarm3.suspend()
+  await tgtSwarm1.destroy()
+  await tgtSwarm2.destroy()
+  await tgtSwarm3.destroy()
 
   // A second commit
   await srcCore.append('block1')
@@ -1126,9 +1126,9 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   const { core: tgtCore, blobsCore: tgtBlobsCore } = await commitPromise
 
-  tgtSwarm1.suspend()
-  tgtSwarm2.suspend()
-  tgtSwarm3.suspend()
+  await tgtSwarm1.destroy()
+  await tgtSwarm2.destroy()
+  await tgtSwarm3.destroy()
 
   // A second commit
   await srcDrive.put('/file2', 'more')
