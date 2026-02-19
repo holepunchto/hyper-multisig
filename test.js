@@ -787,19 +787,13 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   await MultisigUtil.waitUntilFullySeeded(tgtCore)
 
-  let committed = false
-  const commitPromise2 = new Promise(async (resolve) => {
-    const res = await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
-    committed = true
-    resolve(res)
-  })
+  const commitPromise2 = multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
 
   await tgtCopy4.get(1)
   await tgtCopy5.get(1)
   await tgtCopy6.get(1)
 
   await commitPromise2
-  t.is(committed, true, 'committed target ok')
 
   // Create a request that would break the multisig core due to incompatible history
   {
@@ -1210,12 +1204,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   await MultisigUtil.waitUntilFullySeeded(tgtBlobsCore)
 
-  let committed = false
-  const commitPromise2 = new Promise(async (resolve) => {
-    const res = multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
-    committed = true
-    resolve(res)
-  })
+  const commitPromise2 = multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
 
   for (let i = 0; i < srcDrive.db.core.length; i++) {
     await tgtCopy4.db.core.get(i)
@@ -1229,7 +1218,6 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   }
 
   await commitPromise2
-  t.is(committed, true, 'committed target ok')
 
   // Create a request that would break the multisig due to incompatible history
   {
