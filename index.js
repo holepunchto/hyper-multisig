@@ -175,7 +175,7 @@ class HyperMultisig {
       srcCore: await MultisigUtil.getCoreInfo(srcCore),
       batch
     }
-    return { manifest, quorum: obtainedQuorum, result }
+    return { manifest, core, quorum: obtainedQuorum, result }
   }
 
   async commitDrive(
@@ -263,7 +263,7 @@ class HyperMultisig {
         batch: blobsBatch
       }
     }
-    return { manifest, quorum: obtainedQuorum, result }
+    return { manifest, core, blobsCore, quorum: obtainedQuorum, result }
   }
 }
 
