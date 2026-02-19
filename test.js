@@ -634,57 +634,106 @@ test('request core sanity checks throw correct errors', async (t) => {
 
 test('commit core sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
-  const { store, store2, store3, swarm, swarm2, swarm3, multisig, publicKeys, namespace, signers } =
-    await setupTest(t, 4, { numSigners: 1 })
+  const {
+    store2: srcStore1,
+    store3: srcStore2,
+    store4: srcStore3,
+    store5: tgtStore1,
+    store6: tgtStore2,
+    store7: tgtStore3,
+    store8: tgtStore4,
+    store9: tgtStore5,
+    store10: tgtStore6,
+    swarm2: srcSwarm1,
+    swarm3: srcSwarm2,
+    swarm4: srcSwarm3,
+    swarm5: tgtSwarm1,
+    swarm6: tgtSwarm2,
+    swarm7: tgtSwarm3,
+    swarm8: tgtSwarm4,
+    swarm9: tgtSwarm5,
+    swarm10: tgtSwarm6,
+    multisig,
+    publicKeys,
+    namespace,
+    signers
+  } = await setupTest(t, 10, { numSigners: 1 })
 
-  const srcCore = store.get({ name: 'srcCore' })
+  const srcCore = srcStore1.get({ name: 'srcCore' })
   await srcCore.append('block0')
-  swarm.join(srcCore.discoveryKey)
-
-  const copy2 = store2.get(srcCore.key)
-  await copy2.ready()
-  swarm2.join(copy2.discoveryKey)
+  srcSwarm1.join(srcCore.discoveryKey)
 
   const { request } = await multisig.requestCore(publicKeys, namespace, srcCore, srcCore.length, {
     force: true
   })
   const reqStr = z32.encode(request)
-
   const responses = [signResponse(request, signers[0])]
+
   await t.exception(
-    async () => {
-      await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses)
-    },
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses),
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
-    'source not well seeded error'
+    'source not well seeded error 1'
   )
 
-  const copy3 = store3.get(srcCore.key)
-  await copy3.ready()
-  swarm3.join(copy3.discoveryKey)
+  const srcCore2 = srcStore2.get(srcCore.key)
+  await srcCore2.ready()
+  srcSwarm2.join(srcCore2.discoveryKey)
+
+  await t.exception(
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses),
+    /SOURCE_CORE_INSUFFICIENT_PEERS/,
+    'source not well seeded error 2'
+  )
+
+  const srcCore3 = srcStore3.get(srcCore.key)
+  await srcCore3.ready()
+  srcSwarm3.join(srcCore3.discoveryKey)
+
   await MultisigUtil.waitUntilSufficientPeers(srcCore)
 
   await t.exception(
-    async () => {
-      await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses)
-    },
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses),
     /SOURCE_CORE_NOT_FULLY_SEEDED/,
     'source not fully seeded error'
   )
 
-  await copy2.get(0)
-  await copy3.get(0)
+  await srcCore2.get(0)
+  await srcCore3.get(0)
+
   await MultisigUtil.waitUntilFullySeeded(srcCore)
 
-  const { result } = await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+  const commitPromise = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     skipTargetChecks: true
   })
-  const tgtCore = result.destCore
+
+  const tgtCoreKey = MultisigUtil.getCoreKey(publicKeys, namespace)
+
+  const tgtCopy1 = tgtStore1.get(tgtCoreKey)
+  await tgtCopy1.ready()
+  tgtSwarm1.join(tgtCopy1.discoveryKey)
+
+  const tgtCopy2 = tgtStore2.get(tgtCoreKey)
+  await tgtCopy2.ready()
+  tgtSwarm2.join(tgtCopy2.discoveryKey)
+
+  const tgtCopy3 = tgtStore3.get(tgtCoreKey)
+  await tgtCopy3.ready()
+  tgtSwarm3.join(tgtCopy3.discoveryKey)
+
+  await tgtCopy1.get(0)
+  await tgtCopy2.get(0)
+  await tgtCopy3.get(0)
+
+  const { core: tgtCore } = await commitPromise
+
+  await tgtSwarm1.destroy()
+  await tgtSwarm2.destroy()
+  await tgtSwarm3.destroy()
 
   // A second commit
   await srcCore.append('block1')
-  await copy2.get(1)
-  await copy3.get(1)
+  await srcCore2.get(1)
+  await srcCore3.get(1)
   await MultisigUtil.waitUntilFullySeeded(srcCore)
 
   const { request: request2 } = await multisig.requestCore(
@@ -698,63 +747,68 @@ test('commit core sanity checks throw correct errors', async (t) => {
   const responses2 = [signResponse(request2, signers[0])]
 
   await t.exception(
-    async () => {
-      await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2, {
+    () =>
+      multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2, {
         skipTargetChecks: true
-      })
-    },
+      }),
     /TARGET_NOT_EMPTY/,
-    'target core not empty error'
+    'target not empty error'
   )
 
   await t.exception(
-    async () => {
-      await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
-    },
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2),
     /TARGET_CORE_INSUFFICIENT_PEERS/,
-    'target core not well seeded error'
+    'target not well seeded error'
   )
 
-  const tgtCopy2 = store2.get(tgtCore.key)
-  await tgtCopy2.ready()
-  swarm2.join(tgtCopy2.discoveryKey)
+  const tgtCopy4 = tgtStore4.get(tgtCoreKey)
+  await tgtCopy4.ready()
+  tgtSwarm4.join(tgtCopy4.discoveryKey)
 
-  const tgtCopy3 = store3.get(tgtCore.key)
-  await tgtCopy3.ready()
-  swarm3.join(tgtCopy3.discoveryKey)
+  const tgtCopy5 = tgtStore5.get(tgtCoreKey)
+  await tgtCopy5.ready()
+  tgtSwarm5.join(tgtCopy5.discoveryKey)
+
+  const tgtCopy6 = tgtStore6.get(tgtCoreKey)
+  await tgtCopy6.ready()
+  tgtSwarm6.join(tgtCopy6.discoveryKey)
+
   await MultisigUtil.waitUntilSufficientPeers(tgtCore)
 
   await t.exception(
-    async () => {
-      await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
-    },
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2),
     /TARGET_CORE_NOT_FULLY_SEEDED/,
-    'target core not fully downloaded by seeders error'
+    'target not fully seeded error'
   )
 
-  await tgtCopy2.get(0)
-  await tgtCopy3.get(0)
+  await tgtCopy4.get(0)
+  await tgtCopy5.get(0)
+  await tgtCopy6.get(0)
+
   await MultisigUtil.waitUntilFullySeeded(tgtCore)
 
-  await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
+  const commitPromise2 = multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
+
+  await tgtCopy4.get(1)
+  await tgtCopy5.get(1)
+  await tgtCopy6.get(1)
+
+  await commitPromise2
 
   // Create a request that would break the multisig core due to incompatible history
   {
-    await tgtCopy2.get(1)
-    await tgtCopy3.get(1)
-
-    const badSrcCore = store.get({ name: 'bad-core' })
+    const badSrcCore = srcStore1.get({ name: 'bad-core' })
     await badSrcCore.append('block0')
     await badSrcCore.append('different block1')
     await badSrcCore.append('block2')
-    swarm.join(badSrcCore.discoveryKey)
+    srcSwarm1.join(badSrcCore.discoveryKey)
 
-    const badCopy2 = store2.get(badSrcCore.key)
+    const badCopy2 = srcStore2.get(badSrcCore.key)
     await badCopy2.ready()
-    swarm2.join(badCopy2.discoveryKey)
-    const badCopy3 = store3.get(badSrcCore.key)
+    srcSwarm2.join(badCopy2.discoveryKey)
+    const badCopy3 = srcStore3.get(badSrcCore.key)
     await badCopy3.ready()
-    swarm3.join(badCopy3.discoveryKey)
+    srcSwarm3.join(badCopy3.discoveryKey)
 
     await Promise.all([
       badCopy2.get(0),
@@ -777,9 +831,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
     const responses3 = [signResponse(request3, signers[0])]
 
     await t.exception(
-      async () => {
-        await multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3)
-      },
+      () => multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3),
       /INCOMPATIBLE_SOURCE_AND_TARGET/,
       'corruption error'
     )
@@ -953,16 +1005,34 @@ test('request drive sanity checks throw correct errors', async (t) => {
 
 test('commit drive sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
-  const { store, store2, store3, swarm, swarm2, swarm3, multisig, publicKeys, namespace, signers } =
-    await setupTest(t, 4, { numSigners: 1 })
+  const {
+    store2: srcStore1,
+    store3: srcStore2,
+    store4: srcStore3,
+    store5: tgtStore1,
+    store6: tgtStore2,
+    store7: tgtStore3,
+    store8: tgtStore4,
+    store9: tgtStore5,
+    store10: tgtStore6,
+    swarm2: srcSwarm1,
+    swarm3: srcSwarm2,
+    swarm4: srcSwarm3,
+    swarm5: tgtSwarm1,
+    swarm6: tgtSwarm2,
+    swarm7: tgtSwarm3,
+    swarm8: tgtSwarm4,
+    swarm9: tgtSwarm5,
+    swarm10: tgtSwarm6,
+    multisig,
+    publicKeys,
+    namespace,
+    signers
+  } = await setupTest(t, 10, { numSigners: 1 })
 
-  const srcDrive = new Hyperdrive(store)
+  const srcDrive = new Hyperdrive(srcStore1)
   await srcDrive.put('/file', 'content')
-  swarm.join(srcDrive.discoveryKey)
-
-  const copy2 = new Hyperdrive(store2, srcDrive.key)
-  await copy2.ready()
-  swarm2.join(copy2.discoveryKey)
+  srcSwarm1.join(srcDrive.discoveryKey)
 
   const { request } = await multisig.requestDrive(
     publicKeys,
@@ -972,68 +1042,98 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     { force: true }
   )
   const reqStr = z32.encode(request)
-
   const responses = [signResponse(request, signers[0])]
 
   await t.exception(
-    async () => {
-      await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses)
-    },
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses),
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
-    'source not well seeded error'
+    'source not well seeded error 1'
   )
 
-  const copy3 = new Hyperdrive(store3, srcDrive.key)
-  await copy3.ready()
-  swarm3.join(copy3.discoveryKey)
+  const srcCore2 = new Hyperdrive(srcStore2, srcDrive.key)
+  await srcCore2.ready()
+  srcSwarm2.join(srcCore2.discoveryKey)
+
+  await t.exception(
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses),
+    /SOURCE_CORE_INSUFFICIENT_PEERS/,
+    'source not well seeded error 2'
+  )
+
+  const srcCore3 = new Hyperdrive(srcStore3, srcDrive.key)
+  await srcCore3.ready()
+  srcSwarm3.join(srcCore3.discoveryKey)
+
   await MultisigUtil.waitUntilSufficientPeers(srcDrive.db.core)
   await MultisigUtil.waitUntilSufficientPeers(srcDrive.blobs.core)
 
   await t.exception(
-    async () => {
-      await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses)
-    },
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses),
     /SOURCE_CORE_NOT_FULLY_SEEDED: db/,
     'source not fully seeded error'
   )
 
   // We only get the db core, to verify it errors on incomplete blobs core
   for (let i = 0; i < srcDrive.db.core.length; i++) {
-    await copy2.db.core.get(i)
-    await copy3.db.core.get(i)
+    await srcCore2.db.core.get(i)
+    await srcCore3.db.core.get(i)
   }
+
   await MultisigUtil.waitUntilFullySeeded(srcDrive.db.core)
 
   await t.exception(
-    async () => {
-      await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
+    () =>
+      multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
         skipTargetChecks: true
-      })
-    },
+      }),
     /SOURCE_CORE_NOT_FULLY_SEEDED: blobs/,
-    'blobs not fully seeded error'
+    'source blobs not fully seeded error'
   )
 
-  await copy2.get('/file')
-  await copy3.get('/file')
+  await srcCore2.get('/file')
+  await srcCore3.get('/file')
+
   await MultisigUtil.waitUntilFullySeeded(srcDrive.blobs.core)
 
-  const { result } = await multisig.commitDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    reqStr,
-    responses,
-    {
-      skipTargetChecks: true
-    }
-  )
-  const tgtDbCore = result.db.destCore
+  const commitPromise = multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
+    skipTargetChecks: true
+  })
+
+  const tgtCoreKey = MultisigUtil.getCoreKey(publicKeys, namespace)
+
+  const tgtCopy1 = new Hyperdrive(tgtStore1, tgtCoreKey)
+  await tgtCopy1.ready()
+  tgtSwarm1.join(tgtCopy1.discoveryKey)
+
+  const tgtCopy2 = new Hyperdrive(tgtStore2, tgtCoreKey)
+  await tgtCopy2.ready()
+  tgtSwarm2.join(tgtCopy2.discoveryKey)
+
+  const tgtCopy3 = new Hyperdrive(tgtStore3, tgtCoreKey)
+  await tgtCopy3.ready()
+  tgtSwarm3.join(tgtCopy3.discoveryKey)
+
+  for (let i = 0; i < srcDrive.db.core.length; i++) {
+    await tgtCopy1.db.core.get(i)
+    await tgtCopy2.db.core.get(i)
+    await tgtCopy3.db.core.get(i)
+  }
+  for (let i = 0; i < srcDrive.blobs.core.length; i++) {
+    await tgtCopy1.blobs.core.get(i)
+    await tgtCopy2.blobs.core.get(i)
+    await tgtCopy3.blobs.core.get(i)
+  }
+
+  const { core: tgtCore, blobsCore: tgtBlobsCore } = await commitPromise
+
+  await tgtSwarm1.destroy()
+  await tgtSwarm2.destroy()
+  await tgtSwarm3.destroy()
 
   // A second commit
   await srcDrive.put('/file2', 'more')
-  await copy2.checkout(srcDrive.version).get('/file2')
-  await copy3.checkout(srcDrive.version).get('/file2')
+  await srcCore2.checkout(srcDrive.version).get('/file2')
+  await srcCore3.checkout(srcDrive.version).get('/file2')
 
   const { request: request2 } = await multisig.requestDrive(
     publicKeys,
@@ -1046,82 +1146,93 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   const responses2 = [signResponse(request2, signers[0])]
 
   await t.exception(
-    async () => {
-      await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2, {
+    () =>
+      multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2, {
         skipTargetChecks: true
-      })
-    },
+      }),
     /TARGET_NOT_EMPTY/,
-    'target core not empty error'
+    'target not empty error'
   )
 
   await t.exception(
-    async () => {
-      await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
-    },
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2),
     /TARGET_CORE_INSUFFICIENT_PEERS: db/,
-    'target core not well seeded error'
+    'target not well seeded error'
   )
 
-  const tgtDrive = new Hyperdrive(store, tgtDbCore.key)
-  await tgtDrive.ready()
+  const tgtCopy4 = new Hyperdrive(tgtStore4, tgtCoreKey)
+  await tgtCopy4.ready()
+  tgtSwarm4.join(tgtCopy4.discoveryKey)
 
-  const tgtCopy2 = new Hyperdrive(store2, tgtDbCore.key)
-  await tgtCopy2.ready()
-  swarm2.join(tgtCopy2.discoveryKey)
+  const tgtCopy5 = new Hyperdrive(tgtStore5, tgtCoreKey)
+  await tgtCopy5.ready()
+  tgtSwarm5.join(tgtCopy5.discoveryKey)
 
-  const tgtCopy3 = new Hyperdrive(store3, tgtDbCore.key)
-  await tgtCopy3.ready()
-  swarm3.join(tgtCopy3.discoveryKey)
-  await MultisigUtil.waitUntilSufficientPeers(tgtDrive.db.core)
-  await MultisigUtil.waitUntilSufficientPeers(tgtDrive.blobs.core)
+  const tgtCopy6 = new Hyperdrive(tgtStore6, tgtCoreKey)
+  await tgtCopy6.ready()
+  tgtSwarm6.join(tgtCopy6.discoveryKey)
+
+  await MultisigUtil.waitUntilSufficientPeers(tgtCore)
+  await MultisigUtil.waitUntilSufficientPeers(tgtBlobsCore)
 
   await t.exception(
-    async () => {
-      await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
-    },
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2),
     /TARGET_CORE_NOT_FULLY_SEEDED/,
-    'target core not fully downloaded by seeders error'
+    'target not fully seeded error'
   )
 
   // We only get the db core, to verify it errors on incomplete blobs core
-  for (let i = 0; i < tgtDrive.db.core.length; i++) {
-    await tgtCopy2.db.core.get(i)
-    await tgtCopy3.db.core.get(i)
+  for (let i = 0; i < tgtCore.length; i++) {
+    await tgtCopy4.db.core.get(i)
+    await tgtCopy5.db.core.get(i)
+    await tgtCopy6.db.core.get(i)
   }
-  await MultisigUtil.waitUntilFullySeeded(tgtDrive.db.core)
+
+  await MultisigUtil.waitUntilFullySeeded(tgtCore)
 
   await t.exception(
-    async () => {
-      await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses)
-    },
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2),
     /TARGET_CORE_NOT_FULLY_SEEDED: blobs/,
-    'blobs not fully seeded error'
+    'target blobs not fully seeded error'
   )
 
-  await tgtCopy2.get('/file')
-  await tgtCopy3.get('/file')
-  await MultisigUtil.waitUntilFullySeeded(tgtDrive.blobs.core)
+  for (let i = 0; i < tgtBlobsCore.length; i++) {
+    await tgtCopy4.blobs.core.get(i)
+    await tgtCopy5.blobs.core.get(i)
+    await tgtCopy6.blobs.core.get(i)
+  }
 
-  await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
+  await MultisigUtil.waitUntilFullySeeded(tgtBlobsCore)
+
+  const commitPromise2 = multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
+
+  for (let i = 0; i < srcDrive.db.core.length; i++) {
+    await tgtCopy4.db.core.get(i)
+    await tgtCopy5.db.core.get(i)
+    await tgtCopy6.db.core.get(i)
+  }
+  for (let i = 0; i < srcDrive.blobs.core.length; i++) {
+    await tgtCopy4.blobs.core.get(i)
+    await tgtCopy5.blobs.core.get(i)
+    await tgtCopy6.blobs.core.get(i)
+  }
+
+  await commitPromise2
 
   // Create a request that would break the multisig due to incompatible history
   {
-    await tgtCopy2.checkout(tgtDrive.version).get('/file2')
-    await tgtCopy3.checkout(tgtDrive.version).get('/file2')
-
-    const badSrcDrive = new Hyperdrive(store.namespace('other'))
+    const badSrcDrive = new Hyperdrive(srcStore1.namespace('other'))
     await badSrcDrive.put('/file', 'bad')
     await badSrcDrive.put('/file2', 'worse')
     await badSrcDrive.put('/file3', 'owow')
-    swarm.join(badSrcDrive.discoveryKey)
+    srcSwarm1.join(badSrcDrive.discoveryKey)
 
-    const badCopy2 = new Hyperdrive(store2, badSrcDrive.key)
+    const badCopy2 = new Hyperdrive(srcStore2, badSrcDrive.key)
     await badCopy2.ready()
-    swarm2.join(badCopy2.discoveryKey)
-    const badCopy3 = new Hyperdrive(store3, badSrcDrive.key)
+    srcSwarm2.join(badCopy2.discoveryKey)
+    const badCopy3 = new Hyperdrive(srcStore3, badSrcDrive.key)
     await badCopy3.ready()
-    swarm3.join(badCopy3.discoveryKey)
+    srcSwarm3.join(badCopy3.discoveryKey)
 
     await Promise.all([
       badCopy2.get('/file'),

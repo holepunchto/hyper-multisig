@@ -119,7 +119,7 @@ class HyperMultisig {
     srcCore,
     request,
     responses,
-    { force = false, dryRun, quorum, skipTargetChecks = false, peerUpdateTimeout } = {}
+    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
   ) {
     await srcCore.ready()
     this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
@@ -158,12 +158,17 @@ class HyperMultisig {
       end: length,
       commit: !dryRun
     })
+
+    if (!force) {
+      await MultisigUtil.verifyCoreCommitted(core)
+    }
+
     const result = {
       destCore: await MultisigUtil.getCoreInfo(core),
       srcCore: await MultisigUtil.getCoreInfo(srcCore),
       batch
     }
-    return { manifest, quorum: obtainedQuorum, result }
+    return { manifest, core, quorum: obtainedQuorum, result }
   }
 
   async commitDrive(
@@ -172,7 +177,7 @@ class HyperMultisig {
     srcDrive,
     request,
     responses,
-    { dryRun, quorum, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
   ) {
     await srcDrive.ready()
     this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
@@ -226,6 +231,12 @@ class HyperMultisig {
       blobsSignatures,
       { end: length, blobsEnd: blobsLength, commit: !dryRun }
     )
+
+    if (!force) {
+      await MultisigUtil.verifyCoreCommitted(core)
+      await MultisigUtil.verifyCoreCommitted(blobsCore)
+    }
+
     const result = {
       db: {
         destCore: await MultisigUtil.getCoreInfo(core),
@@ -238,7 +249,7 @@ class HyperMultisig {
         batch: blobsBatch
       }
     }
-    return { manifest, quorum: obtainedQuorum, result }
+    return { manifest, core, blobsCore, quorum: obtainedQuorum, result }
   }
 }
 
