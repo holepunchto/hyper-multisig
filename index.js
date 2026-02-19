@@ -143,7 +143,7 @@ class Request extends EventEmitter {
 
   async _runInternal(...args) {
     // Tick so the user can register event listeners
-    await new Promise(resolve => queueMicrotask(resolve))
+    await new Promise((resolve) => queueMicrotask(resolve))
 
     await this._run(...args)
   }
