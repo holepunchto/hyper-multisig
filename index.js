@@ -343,7 +343,7 @@ class CommitDrive extends Request {
     )
 
     if (!force) {
-      this.emit('verify-committed-start')
+      this.emit('verify-committed-start', core.key)
       await MultisigUtil.verifyCoreCommitted(core)
       await MultisigUtil.verifyCoreCommitted(blobsCore)
     }
