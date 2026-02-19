@@ -44,5 +44,11 @@
   "bugs": {
     "url": "https://github.com/holepunchto/hyper-multisig/issues"
   },
-  "homepage": "https://github.com/holepunchto/hyper-multisig#readme"
+  "homepage": "https://github.com/holepunchto/hyper-multisig#readme",
+  "imports": {
+    "events": {
+      "bare": "bare-events",
+      "default": "events"
+    }
+  }
 }
