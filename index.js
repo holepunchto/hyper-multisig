@@ -137,8 +137,15 @@ class Request extends EventEmitter {
     this.swarm = multisig.swarm
     this.args = args
 
-    this._running = this._run(...args)
+    this._running = this._runInternal(...args)
     this._running.catch(() => {})
+  }
+
+  async _runInternal(...args) {
+    // Tick so the user can register event listeners
+    await new Promise(resolve => queueMicrotask(resolve))
+
+    await this._run(...args)
   }
 
   async _run() {
