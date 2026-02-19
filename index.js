@@ -120,10 +120,10 @@ class HyperMultisig {
     request,
     responses,
     {
+      quorum,
+      dryRun,
       force = false,
       forcePostCommit = false,
-      dryRun,
-      quorum,
       skipTargetChecks = false,
       peerUpdateTimeout
     } = {}
@@ -184,7 +184,14 @@ class HyperMultisig {
     srcDrive,
     request,
     responses,
-    { dryRun, quorum, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+    {
+      quorum,
+      dryRun,
+      force = false,
+      forcePostCommit = false,
+      skipTargetChecks = false,
+      peerUpdateTimeout
+    } = {}
   ) {
     await srcDrive.ready()
     this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
@@ -239,7 +246,7 @@ class HyperMultisig {
       { end: length, blobsEnd: blobsLength, commit: !dryRun }
     )
 
-    if (!force) {
+    if (!force && !forcePostCommit) {
       await MultisigUtil.verifyCoreCommitted(core)
       await MultisigUtil.verifyCoreCommitted(blobsCore)
     }
