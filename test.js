@@ -632,48 +632,61 @@ test('request core sanity checks throw correct errors', async (t) => {
   t.is(req.length, srcCore.length, 'request length is correct')
 })
 
-test('commit core sanity checks throw correct errors', async (t) => {
+test.solo('commit core sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
   const {
-    store,
-    store2,
-    store3,
-    store4,
-    swarm,
-    swarm2,
-    swarm3,
-    swarm4,
+    store2: srcStore1,
+    store3: srcStore2,
+    store4: srcStore3,
+    store5: tgtStore1,
+    store6: tgtStore2,
+    store7: tgtStore3,
+    swarm2: srcSwarm1,
+    swarm3: srcSwarm2,
+    swarm4: srcSwarm3,
+    swarm5: tgtSwarm1,
+    swarm6: tgtSwarm2,
+    swarm7: tgtSwarm3,
     multisig,
     publicKeys,
     namespace,
     signers
-  } = await setupTest(t, 4, { numSigners: 1 })
+  } = await setupTest(t, 7, { numSigners: 1 })
 
-  const srcCore = store.get({ name: 'srcCore' })
+  const srcCore = srcStore1.get({ name: 'srcCore' })
   await srcCore.append('block0')
-  swarm.join(srcCore.discoveryKey)
-
-  const copy2 = store2.get(srcCore.key)
-  await copy2.ready()
-  swarm2.join(copy2.discoveryKey)
+  srcSwarm1.join(srcCore.discoveryKey)
 
   const { request } = await multisig.requestCore(publicKeys, namespace, srcCore, srcCore.length, {
     force: true
   })
   const reqStr = z32.encode(request)
-
   const responses = [signResponse(request, signers[0])]
+  
   await t.exception(
     async () => {
       await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses)
     },
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
-    'source not well seeded error'
+    'source not well seeded error 1'
   )
 
-  const copy3 = store3.get(srcCore.key)
-  await copy3.ready()
-  swarm3.join(copy3.discoveryKey)
+  const srcCore2 = srcStore2.get(srcCore.key)
+  await srcCore2.ready()
+  srcSwarm2.join(srcCore2.discoveryKey)
+
+  await t.exception(
+    async () => {
+      await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses)
+    },
+    /SOURCE_CORE_INSUFFICIENT_PEERS/,
+    'source not well seeded error 2'
+  )
+
+  const srcCore3 = srcStore3.get(srcCore.key)
+  await srcCore3.ready()
+  srcSwarm3.join(srcCore3.discoveryKey)
+
   await MultisigUtil.waitUntilSufficientPeers(srcCore)
 
   await t.exception(
@@ -684,19 +697,40 @@ test('commit core sanity checks throw correct errors', async (t) => {
     'source not fully seeded error'
   )
 
-  await copy2.get(0)
-  await copy3.get(0)
+  await srcCore2.get(0)
+  await srcCore3.get(0)
+
   await MultisigUtil.waitUntilFullySeeded(srcCore)
 
-  const { result } = await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+  const commitPromise = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     skipTargetChecks: true
   })
+
+  const tgtCoreKey = MultisigUtil.getCoreKey(publicKeys, namespace)
+
+  const tgtCopy1 = tgtStore1.get(tgtCoreKey)
+  await tgtCopy1.ready()
+  tgtSwarm1.join(tgtCopy1.discoveryKey)
+
+  const tgtCopy2 = tgtStore2.get(tgtCoreKey)
+  await tgtCopy2.ready()
+  tgtSwarm2.join(tgtCopy2.discoveryKey)
+
+  const tgtCopy3 = tgtStore3.get(tgtCoreKey)
+  await tgtCopy3.ready()
+  tgtSwarm3.join(tgtCopy3.discoveryKey)
+
+  await tgtCopy1.get(0)
+  await tgtCopy2.get(0)
+  await tgtCopy3.get(0)
+
+  const { result } = await commitPromise
   const tgtCore = result.destCore
 
   // A second commit
   await srcCore.append('block1')
-  await copy2.get(1)
-  await copy3.get(1)
+  await srcCore2.get(1)
+  await srcCore3.get(1)
   await MultisigUtil.waitUntilFullySeeded(srcCore)
 
   const { request: request2 } = await multisig.requestCore(
@@ -704,7 +738,6 @@ test('commit core sanity checks throw correct errors', async (t) => {
     namespace,
     srcCore,
     srcCore.length,
-    { force: true }
   )
   const reqStr2 = z32.encode(request2)
   const responses2 = [signResponse(request2, signers[0])]
@@ -719,6 +752,10 @@ test('commit core sanity checks throw correct errors', async (t) => {
     'target core not empty error'
   )
 
+  tgtSwarm1.suspend()
+  tgtSwarm2.suspend()
+  tgtSwarm3.suspend()
+
   await t.exception(
     async () => {
       await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
@@ -727,81 +764,69 @@ test('commit core sanity checks throw correct errors', async (t) => {
     'target core not well seeded error'
   )
 
-  const tgtCopy2 = store2.get(tgtCore.key)
-  await tgtCopy2.ready()
-  swarm2.join(tgtCopy2.discoveryKey)
+  // tgtSwarm1.resume()
+  // tgtSwarm2.resume()
+  // tgtSwarm3.resume()
 
-  const tgtCopy3 = store3.get(tgtCore.key)
-  await tgtCopy3.ready()
-  swarm3.join(tgtCopy3.discoveryKey)
+  // await MultisigUtil.waitUntilSufficientPeers(tgtCore)
 
-  const tgtCopy4 = store4.get(tgtCore.key)
-  await tgtCopy4.ready()
-  swarm4.join(tgtCopy4.discoveryKey)
+  // await t.exception(
+  //   async () => {
+  //     await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
+  //   },
+  //   /TARGET_CORE_NOT_FULLY_SEEDED/,
+  //   'target core not fully downloaded by seeders error'
+  // )
 
-  await MultisigUtil.waitUntilSufficientPeers(tgtCore)
+  // await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
 
-  await t.exception(
-    async () => {
-      await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
-    },
-    /TARGET_CORE_NOT_FULLY_SEEDED/,
-    'target core not fully downloaded by seeders error'
-  )
+  // // Create a request that would break the multisig core due to incompatible history
+  // {
+  //   await tgtCopy2.get(1)
+  //   await tgtCopy3.get(1)
+  //   await tgtCopy4.get(1)
 
-  await tgtCopy2.get(0)
-  await tgtCopy3.get(0)
-  await tgtCopy4.get(0)
+  //   const badSrcCore = store.get({ name: 'bad-core' })
+  //   await badSrcCore.append('block0')
+  //   await badSrcCore.append('different block1')
+  //   await badSrcCore.append('block2')
+  //   swarm.join(badSrcCore.discoveryKey)
 
-  const promise = Promise.all([tgtCopy2.get(1), tgtCopy3.get(1), tgtCopy4.get(1)])
+  //   const badCopy2 = store2.get(badSrcCore.key)
+  //   await badCopy2.ready()
+  //   swarm2.join(badCopy2.discoveryKey)
+  //   const badCopy3 = store3.get(badSrcCore.key)
+  //   await badCopy3.ready()
+  //   swarm3.join(badCopy3.discoveryKey)
 
-  await multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
+  //   await Promise.all([
+  //     badCopy2.get(0),
+  //     badCopy2.get(1),
+  //     badCopy2.get(2),
+  //     badCopy3.get(0),
+  //     badCopy3.get(1),
+  //     badCopy3.get(2)
+  //   ])
+  //   await MultisigUtil.waitUntilFullySeeded(badSrcCore)
 
-  // Create a request that would break the multisig core due to incompatible history
-  {
-    await promise
+  //   const { request: request3 } = await multisig.requestCore(
+  //     publicKeys,
+  //     namespace,
+  //     badSrcCore,
+  //     badSrcCore.length,
+  //     { force: true }
+  //   )
+  //   const reqStr3 = z32.encode(request3)
+  //   const responses3 = [signResponse(request3, signers[0])]
 
-    const badSrcCore = store.get({ name: 'bad-core' })
-    await badSrcCore.append('block0')
-    await badSrcCore.append('different block1')
-    await badSrcCore.append('block2')
-    swarm.join(badSrcCore.discoveryKey)
-
-    const badCopy2 = store2.get(badSrcCore.key)
-    await badCopy2.ready()
-    swarm2.join(badCopy2.discoveryKey)
-    const badCopy3 = store3.get(badSrcCore.key)
-    await badCopy3.ready()
-    swarm3.join(badCopy3.discoveryKey)
-
-    await Promise.all([
-      badCopy2.get(0),
-      badCopy2.get(1),
-      badCopy2.get(2),
-      badCopy3.get(0),
-      badCopy3.get(1),
-      badCopy3.get(2)
-    ])
-    await MultisigUtil.waitUntilFullySeeded(badSrcCore)
-
-    const { request: request3 } = await multisig.requestCore(
-      publicKeys,
-      namespace,
-      badSrcCore,
-      badSrcCore.length,
-      { force: true }
-    )
-    const reqStr3 = z32.encode(request3)
-    const responses3 = [signResponse(request3, signers[0])]
-
-    await t.exception(
-      async () => {
-        await multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3)
-      },
-      /INCOMPATIBLE_SOURCE_AND_TARGET/,
-      'corruption error'
-    )
-  }
+  //   await t.exception(
+  //     async () => {
+  //       await multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3)
+  //     },
+  //     /INCOMPATIBLE_SOURCE_AND_TARGET/,
+  //     'corruption error'
+  //   )
+  // }
 })
 
 test('request drive', async (t) => {

@@ -159,7 +159,7 @@ class HyperMultisig {
       commit: !dryRun
     })
 
-    if (!force && !skipTargetChecks) {
+    if (!force) {
       await MultisigUtil.verifyCoreCommitted(core)
     }
 
@@ -232,7 +232,7 @@ class HyperMultisig {
       { end: length, blobsEnd: blobsLength, commit: !dryRun }
     )
 
-    if (!force && !skipTargetChecks) {
+    if (!force) {
       await MultisigUtil.verifyCoreCommitted(core)
       await MultisigUtil.verifyCoreCommitted(blobsCore)
     }
