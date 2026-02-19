@@ -119,7 +119,14 @@ class HyperMultisig {
     srcCore,
     request,
     responses,
-    { force = false, dryRun, quorum, skipTargetChecks = false, peerUpdateTimeout } = {}
+    {
+      force = false,
+      forcePostCommit = false,
+      dryRun,
+      quorum,
+      skipTargetChecks = false,
+      peerUpdateTimeout
+    } = {}
   ) {
     await srcCore.ready()
     this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
@@ -159,7 +166,7 @@ class HyperMultisig {
       commit: !dryRun
     })
 
-    if (!force) {
+    if (!force && !forcePostCommit) {
       await MultisigUtil.verifyCoreCommitted(core)
     }
 
