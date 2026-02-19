@@ -186,7 +186,7 @@ class CommitCore extends Request {
     srcCore,
     request,
     responses,
-    { quorum, dryRun, force, skipTargetChecks, peerUpdateTimeout }
+    { quorum, dryRun, force, skipTargetChecks, peerUpdateTimeout, minFullCopies = 2 }
   ) {
     await srcCore.ready()
     this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
@@ -229,8 +229,8 @@ class CommitCore extends Request {
     })
 
     if (!force) {
-      this.emit('verify-committed-start')
-      await MultisigUtil.verifyCoreCommitted(core)
+      this.emit('verify-committed-start', core.key)
+      await MultisigUtil.verifyCoreCommitted(core, { minPeers: minFullCopies })
     }
 
     const result = {
@@ -238,6 +238,7 @@ class CommitCore extends Request {
       srcCore: await MultisigUtil.getCoreInfo(srcCore),
       batch
     }
+
     return { manifest, core, quorum: obtainedQuorum, result }
   }
 }
