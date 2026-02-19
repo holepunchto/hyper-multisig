@@ -20,6 +20,7 @@
  * }} CoreInfo
  */
 
+const { EventEmitter } = require('events')
 const cenc = require('compact-encoding')
 const CoreSign = require('hypercore-sign')
 const SignRequest = require('hypercore-signing-request')
@@ -66,13 +67,95 @@ class HyperMultisig {
     return { manifest, key, core, blobsManifest, blobsKey, blobsCore }
   }
 
-  async requestCore(
+  requestCore(
     publicKeys,
     namespace,
     srcCore,
     length,
     { force = false, quorum, peerUpdateTimeout } = {}
   ) {
+    return new RequestCore(this, publicKeys, namespace, srcCore, length, {
+      force,
+      quorum,
+      peerUpdateTimeout
+    })
+  }
+
+  requestDrive(
+    publicKeys,
+    namespace,
+    srcDrive,
+    length,
+    { force = false, quorum, peerUpdateTimeout } = {}
+  ) {
+    return new RequestDrive(this, publicKeys, namespace, srcDrive, length, {
+      force,
+      quorum,
+      peerUpdateTimeout
+    })
+  }
+
+  commitCore(
+    publicKeys,
+    namespace,
+    srcCore,
+    request,
+    responses,
+    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+  ) {
+    return new CommitCore(this, publicKeys, namespace, srcCore, request, responses, {
+      quorum,
+      dryRun,
+      force,
+      skipTargetChecks,
+      peerUpdateTimeout
+    })
+  }
+
+  commitDrive(
+    publicKeys,
+    namespace,
+    srcDrive,
+    request,
+    responses,
+    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+  ) {
+    return new CommitDrive(this, publicKeys, namespace, srcDrive, request, responses, {
+      quorum,
+      dryRun,
+      force,
+      skipTargetChecks,
+      peerUpdateTimeout
+    })
+  }
+}
+
+class Request extends EventEmitter {
+  constructor(multisig, ...args) {
+    super()
+    this.multisig = multisig
+    this.swarm = multisig.swarm
+    this.args = args
+
+    this._running = this._run(...args)
+    this._running.catch(() => {})
+  }
+
+  async _run() {
+    throw new Error('Implement me')
+  }
+
+  async done() {
+    return await this._running
+  }
+}
+
+class RequestCore extends Request {
+  constructor(...args) {
+    super(...args)
+  }
+
+  async _run(publicKeys, namespace, srcCore, length, { force, quorum, peerUpdateTimeout }) {
     await srcCore.ready()
     this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
     await srcCore.download({ start: 0, end: length }).done()
@@ -83,53 +166,31 @@ class HyperMultisig {
     const request = await SignRequest.generate(srcCore, { manifest, length })
     return { manifest, request }
   }
+}
 
-  async requestDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    length,
-    { force = false, quorum, peerUpdateTimeout } = {}
-  ) {
-    await srcDrive.ready()
-    this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
-    await srcDrive.getBlobs()
-    length = length || srcDrive.core.length
-
-    if (!force) {
-      await MultisigUtil.verifyCoreRequestable(srcDrive.core, length, {
-        peerUpdateTimeout,
-        coreId: 'db'
-      })
-      const contentLength = await srcDrive.getBlobsLength(length)
-      await MultisigUtil.verifyCoreRequestable(srcDrive.blobs.core, contentLength, {
-        peerUpdateTimeout,
-        coreId: 'blobs'
-      })
-    }
-
-    const manifest = MultisigUtil.getManifest(publicKeys, namespace, { quorum })
-    const request = await SignRequest.generateDrive(srcDrive, { manifest, length })
-    return { manifest, request }
+class CommitCore extends Request {
+  constructor(...args) {
+    super(...args)
   }
 
-  async commitCore(
+  async _run(
     publicKeys,
     namespace,
     srcCore,
     request,
     responses,
-    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+    { quorum, dryRun, force, skipTargetChecks, peerUpdateTimeout }
   ) {
     await srcCore.ready()
     this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
 
-    const { manifest, core } = await this.createCore(publicKeys, namespace, { quorum })
+    const { manifest, core } = await this.multisig.createCore(publicKeys, namespace, { quorum })
     this.swarm.join(core.discoveryKey)
 
     const { length } = SignRequest.decode(z32.decode(request))
 
     if (!force) {
+      this.emit('verify-committable-start')
       await MultisigUtil.verifyCoreCommittable(srcCore, core, length, {
         skipTargetChecks,
         peerUpdateTimeout
@@ -154,12 +215,14 @@ class HyperMultisig {
       return signResponses[publicKeyHex]?.signatures[0]
     })
 
+    this.emit('commit-start')
     const batch = await MultisigUtil.signCore(core, srcCore, signatures, {
       end: length,
       commit: !dryRun
     })
 
     if (!force) {
+      this.emit('verify-committed-start')
       await MultisigUtil.verifyCoreCommitted(core)
     }
 
@@ -170,26 +233,64 @@ class HyperMultisig {
     }
     return { manifest, core, quorum: obtainedQuorum, result }
   }
+}
 
-  async commitDrive(
+class RequestDrive extends Request {
+  constructor(...args) {
+    super(...args)
+  }
+
+  async _run(publicKeys, namespace, srcDrive, length, { force, quorum, peerUpdateTimeout }) {
+    await srcDrive.ready()
+    this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
+    await srcDrive.getBlobs()
+    length = length || srcDrive.core.length
+
+    if (!force) {
+      await MultisigUtil.verifyCoreRequestable(srcDrive.core, length, {
+        peerUpdateTimeout,
+        coreId: 'db'
+      })
+      const contentLength = await srcDrive.getBlobsLength(length)
+      await MultisigUtil.verifyCoreRequestable(srcDrive.blobs.core, contentLength, {
+        peerUpdateTimeout,
+        coreId: 'blobs'
+      })
+    }
+
+    const manifest = MultisigUtil.getManifest(publicKeys, namespace, { quorum })
+    const request = await SignRequest.generateDrive(srcDrive, { manifest, length })
+    return { manifest, request }
+  }
+}
+
+class CommitDrive extends Request {
+  constructor(...args) {
+    super(...args)
+  }
+
+  async _run(
     publicKeys,
     namespace,
     srcDrive,
     request,
     responses,
-    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+    { quorum, dryRun, force, skipTargetChecks, peerUpdateTimeout }
   ) {
     await srcDrive.ready()
     this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
     await srcDrive.getBlobs()
 
-    const { manifest, core, blobsCore } = await this.createDrive(publicKeys, namespace, { quorum })
+    const { manifest, core, blobsCore } = await this.multisig.createDrive(publicKeys, namespace, {
+      quorum
+    })
     this.swarm.join(core.discoveryKey)
 
     const { length, content } = SignRequest.decode(z32.decode(request))
     const blobsLength = content.length
 
     if (!force) {
+      this.emit('verify-committable-start')
       await MultisigUtil.verifyCoreCommittable(srcDrive.db.core, core, length, {
         skipTargetChecks,
         peerUpdateTimeout,
@@ -222,6 +323,7 @@ class HyperMultisig {
     const signatures = allSignatures.map((item) => item?.[0])
     const blobsSignatures = allSignatures.map((item) => item?.[1])
 
+    this.emit('commit-start')
     const { batch, blobsBatch } = await MultisigUtil.signDrive(
       core,
       srcDrive.core,
@@ -233,6 +335,7 @@ class HyperMultisig {
     )
 
     if (!force) {
+      this.emit('verify-committed-start')
       await MultisigUtil.verifyCoreCommitted(core)
       await MultisigUtil.verifyCoreCommitted(blobsCore)
     }

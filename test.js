@@ -506,13 +506,9 @@ test('request core', async (t) => {
   await srcCore.append(b4a.from('1'))
   await srcCore.append(b4a.from('2'))
 
-  const { manifest, request } = await multisig.requestCore(
-    publicKeys,
-    namespace,
-    srcCore,
-    srcCore.length,
-    { force: true }
-  )
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
   const req = SignRequest.decode(request)
   t.is(req.id, idEnc.normalize(Hypercore.key(manifest)), 'request key is correct')
   t.is(req.length, srcCore.length, 'request length is correct')
@@ -530,19 +526,18 @@ test('commit core', async (t) => {
   await srcCore.append(b4a.from('1'))
   await srcCore.append(b4a.from('2'))
 
-  const { manifest, request } = await multisig.requestCore(
-    publicKeys,
-    namespace,
-    srcCore,
-    srcCore.length,
-    { force: true }
-  )
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
   const reqStr = z32.encode(request)
 
   const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-  const { result } = await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+  const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     force: true
   })
+
+  const { result } = await commitCore.done()
+
   t.is(result.destCore.length, srcCore.length, 'core length is correct')
 })
 
@@ -558,29 +553,22 @@ test('commit core multiple times', async (t) => {
   await srcCore.append(b4a.from('1'))
   await srcCore.append(b4a.from('2'))
 
-  const { manifest, request } = await multisig.requestCore(
-    publicKeys,
-    namespace,
-    srcCore,
-    srcCore.length,
-    { force: true }
-  )
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
   const reqStr = z32.encode(request)
 
   const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-  const { result } = await multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
-    force: true
-  })
+  const { result } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+      force: true
+    })
+    .done()
   t.is(result.destCore.length, srcCore.length, 'core length is correct')
 
-  const { result: result2 } = await multisig.commitCore(
-    publicKeys,
-    namespace,
-    srcCore,
-    reqStr,
-    responses,
-    { force: true }
-  )
+  const { result: result2 } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
+    .done()
   t.is(result2.destCore.length, srcCore.length, 'core length is correct')
 })
 
@@ -598,7 +586,7 @@ test('request core sanity checks throw correct errors', async (t) => {
 
   await t.exception(
     async () => {
-      await multisig.requestCore(publicKeys, namespace, srcCore, srcCore.length)
+      await multisig.requestCore(publicKeys, namespace, srcCore, srcCore.length).done()
     },
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
     'source not well seeded error'
@@ -611,7 +599,7 @@ test('request core sanity checks throw correct errors', async (t) => {
 
   await t.exception(
     async () => {
-      await multisig.requestCore(publicKeys, namespace, srcCore, srcCore.length)
+      await multisig.requestCore(publicKeys, namespace, srcCore, srcCore.length).done()
     },
     /SOURCE_CORE_NOT_FULLY_SEEDED/,
     'source not fully seeded error'
@@ -621,12 +609,9 @@ test('request core sanity checks throw correct errors', async (t) => {
   await copy3.get(0)
   await MultisigUtil.waitUntilFullySeeded(srcCore)
 
-  const { manifest, request } = await multisig.requestCore(
-    publicKeys,
-    namespace,
-    srcCore,
-    srcCore.length
-  )
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length)
+    .done()
   const req = SignRequest.decode(request)
   t.is(req.id, idEnc.normalize(Hypercore.key(manifest)), 'request key is correct')
   t.is(req.length, srcCore.length, 'request length is correct')
@@ -663,14 +648,16 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await srcCore.append('block0')
   srcSwarm1.join(srcCore.discoveryKey)
 
-  const { request } = await multisig.requestCore(publicKeys, namespace, srcCore, srcCore.length, {
-    force: true
-  })
+  const { request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, {
+      force: true
+    })
+    .done()
   const reqStr = z32.encode(request)
   const responses = [signResponse(request, signers[0])]
 
   await t.exception(
-    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses),
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
     'source not well seeded error 1'
   )
@@ -680,7 +667,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   srcSwarm2.join(srcCore2.discoveryKey)
 
   await t.exception(
-    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses),
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
     'source not well seeded error 2'
   )
@@ -692,7 +679,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await MultisigUtil.waitUntilSufficientPeers(srcCore)
 
   await t.exception(
-    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses),
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
     /SOURCE_CORE_NOT_FULLY_SEEDED/,
     'source not fully seeded error'
   )
@@ -702,9 +689,18 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   await MultisigUtil.waitUntilFullySeeded(srcCore)
 
-  const commitPromise = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+  const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     skipTargetChecks: true
   })
+
+  let verifyCommittableStart = 0
+  let commitStart = 0
+  let verifyCommittedStart = 0
+  commitCore.on('verify-committable-start', () => verifyCommittableStart++)
+  commitCore.on('commit-start', () => commitStart++)
+  commitCore.on('verify-committed-start', () => verifyCommittedStart++)
+
+  const commitPromise = commitCore.done()
 
   const tgtCoreKey = MultisigUtil.getCoreKey(publicKeys, namespace)
 
@@ -726,6 +722,10 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   const { core: tgtCore } = await commitPromise
 
+  t.is(verifyCommittableStart, 1, 'verify-committable-start event')
+  t.is(commitStart, 1, 'commit-start event')
+  t.is(verifyCommittedStart, 1, 'verify-committed-start event')
+
   await tgtSwarm1.destroy()
   await tgtSwarm2.destroy()
   await tgtSwarm3.destroy()
@@ -736,27 +736,25 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await srcCore3.get(1)
   await MultisigUtil.waitUntilFullySeeded(srcCore)
 
-  const { request: request2 } = await multisig.requestCore(
-    publicKeys,
-    namespace,
-    srcCore,
-    srcCore.length,
-    { force: true }
-  )
+  const { request: request2 } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
   const reqStr2 = z32.encode(request2)
   const responses2 = [signResponse(request2, signers[0])]
 
   await t.exception(
     () =>
-      multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2, {
-        skipTargetChecks: true
-      }),
+      multisig
+        .commitCore(publicKeys, namespace, srcCore, reqStr2, responses2, {
+          skipTargetChecks: true
+        })
+        .done(),
     /TARGET_NOT_EMPTY/,
     'target not empty error'
   )
 
   await t.exception(
-    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2),
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2).done(),
     /TARGET_CORE_INSUFFICIENT_PEERS/,
     'target not well seeded error'
   )
@@ -776,7 +774,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await MultisigUtil.waitUntilSufficientPeers(tgtCore)
 
   await t.exception(
-    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2),
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2).done(),
     /TARGET_CORE_NOT_FULLY_SEEDED/,
     'target not fully seeded error'
   )
@@ -787,7 +785,9 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   await MultisigUtil.waitUntilFullySeeded(tgtCore)
 
-  const commitPromise2 = multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
+  const commitPromise2 = multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
+    .done()
 
   await tgtCopy4.get(1)
   await tgtCopy5.get(1)
@@ -820,18 +820,14 @@ test('commit core sanity checks throw correct errors', async (t) => {
     ])
     await MultisigUtil.waitUntilFullySeeded(badSrcCore)
 
-    const { request: request3 } = await multisig.requestCore(
-      publicKeys,
-      namespace,
-      badSrcCore,
-      badSrcCore.length,
-      { force: true }
-    )
+    const { request: request3 } = await multisig
+      .requestCore(publicKeys, namespace, badSrcCore, badSrcCore.length, { force: true })
+      .done()
     const reqStr3 = z32.encode(request3)
     const responses3 = [signResponse(request3, signers[0])]
 
     await t.exception(
-      () => multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3),
+      () => multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3).done(),
       /INCOMPATIBLE_SOURCE_AND_TARGET/,
       'corruption error'
     )
@@ -849,13 +845,9 @@ test('request drive', async (t) => {
   await srcDrive.put('/file2', b4a.from('1'))
   await srcDrive.put('/file3', b4a.from('2'))
 
-  const { manifest, request } = await multisig.requestDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    srcDrive.version,
-    { force: true }
-  )
+  const { manifest, request } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
   const req = SignRequest.decode(request)
   t.is(req.id, idEnc.normalize(Hypercore.key(manifest)), 'request key is correct')
   t.is(req.length, srcDrive.core.length, 'request length is correct')
@@ -872,26 +864,17 @@ test('commit drive', async (t) => {
   await srcDrive.put('/file2', b4a.from('1'))
   await srcDrive.put('/file3', b4a.from('2'))
 
-  const { manifest, request } = await multisig.requestDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    srcDrive.version,
-    { force: true }
-  )
+  const { manifest, request } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
   const reqStr = z32.encode(request)
 
   const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-  const { result } = await multisig.commitDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    reqStr,
-    responses,
-    {
+  const { result } = await multisig
+    .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
-    }
-  )
+    })
+    .done()
   t.is(result.db.destCore.length, srcDrive.core.length, 'core length is correct')
 })
 
@@ -906,36 +889,22 @@ test('commit drive multiple times', async (t) => {
   await srcDrive.put('/file2', b4a.from('1'))
   await srcDrive.put('/file3', b4a.from('2'))
 
-  const { manifest, request } = await multisig.requestDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    srcDrive.version,
-    { force: true }
-  )
+  const { manifest, request } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
   const reqStr = z32.encode(request)
 
   const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-  const { result } = await multisig.commitDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    reqStr,
-    responses,
-    {
+  const { result } = await multisig
+    .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
-    }
-  )
+    })
+    .done()
   t.is(result.db.destCore.length, srcDrive.core.length, 'core length is correct')
 
-  const { result: result2 } = await multisig.commitDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    reqStr,
-    responses,
-    { force: true }
-  )
+  const { result: result2 } = await multisig
+    .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, { force: true })
+    .done()
   t.is(result2.db.destCore.length, srcDrive.core.length, 'core length is correct')
 })
 
@@ -953,7 +922,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
 
   await t.exception(
     async () => {
-      await multisig.requestDrive(publicKeys, namespace, srcDrive, srcDrive.version)
+      await multisig.requestDrive(publicKeys, namespace, srcDrive, srcDrive.version).done()
     },
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
     'source not well seeded error'
@@ -967,7 +936,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
 
   await t.exception(
     async () => {
-      await multisig.requestDrive(publicKeys, namespace, srcDrive, srcDrive.version)
+      await multisig.requestDrive(publicKeys, namespace, srcDrive, srcDrive.version).done()
     },
     /SOURCE_CORE_NOT_FULLY_SEEDED: db/,
     'source not fully seeded error'
@@ -982,7 +951,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
 
   await t.exception(
     async () => {
-      await multisig.requestDrive(publicKeys, namespace, srcDrive, srcDrive.version)
+      await multisig.requestDrive(publicKeys, namespace, srcDrive, srcDrive.version).done()
     },
     /SOURCE_CORE_NOT_FULLY_SEEDED: blobs/,
     'blobs not fully seeded error'
@@ -992,12 +961,9 @@ test('request drive sanity checks throw correct errors', async (t) => {
   await copy3.get('/file')
   await MultisigUtil.waitUntilFullySeeded(srcDrive.blobs.core)
 
-  const { request, manifest } = await multisig.requestDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    srcDrive.version
-  )
+  const { request, manifest } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version)
+    .done()
   const req = SignRequest.decode(request)
   t.is(req.id, idEnc.normalize(Hypercore.key(manifest)), 'request key is correct')
   t.is(req.length, srcDrive.core.length, 'request length is correct')
@@ -1034,18 +1000,14 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await srcDrive.put('/file', 'content')
   srcSwarm1.join(srcDrive.discoveryKey)
 
-  const { request } = await multisig.requestDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    srcDrive.version,
-    { force: true }
-  )
+  const { request } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
   const reqStr = z32.encode(request)
   const responses = [signResponse(request, signers[0])]
 
   await t.exception(
-    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses),
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
     'source not well seeded error 1'
   )
@@ -1055,7 +1017,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   srcSwarm2.join(srcCore2.discoveryKey)
 
   await t.exception(
-    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses),
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
     /SOURCE_CORE_INSUFFICIENT_PEERS/,
     'source not well seeded error 2'
   )
@@ -1068,7 +1030,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await MultisigUtil.waitUntilSufficientPeers(srcDrive.blobs.core)
 
   await t.exception(
-    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses),
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
     /SOURCE_CORE_NOT_FULLY_SEEDED: db/,
     'source not fully seeded error'
   )
@@ -1083,9 +1045,11 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   await t.exception(
     () =>
-      multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
-        skipTargetChecks: true
-      }),
+      multisig
+        .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
+          skipTargetChecks: true
+        })
+        .done(),
     /SOURCE_CORE_NOT_FULLY_SEEDED: blobs/,
     'source blobs not fully seeded error'
   )
@@ -1095,9 +1059,19 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   await MultisigUtil.waitUntilFullySeeded(srcDrive.blobs.core)
 
-  const commitPromise = multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
+  let verifyCommittableStart = 0
+  let commitStart = 0
+  let verifyCommittedStart = 0
+
+  const commitDrive = multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
     skipTargetChecks: true
   })
+
+  commitDrive.on('verify-committable-start', () => verifyCommittableStart++)
+  commitDrive.on('commit-start', () => commitStart++)
+  commitDrive.on('verify-committed-start', () => verifyCommittedStart++)
+
+  const commitPromise = commitDrive.done()
 
   const tgtCoreKey = MultisigUtil.getCoreKey(publicKeys, namespace)
 
@@ -1126,6 +1100,10 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   const { core: tgtCore, blobsCore: tgtBlobsCore } = await commitPromise
 
+  t.is(verifyCommittableStart, 1, 'verify-committable-start event')
+  t.is(commitStart, 1, 'commit-start event')
+  t.is(verifyCommittedStart, 1, 'verify-committed-start event')
+
   await tgtSwarm1.destroy()
   await tgtSwarm2.destroy()
   await tgtSwarm3.destroy()
@@ -1135,27 +1113,25 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await srcCore2.checkout(srcDrive.version).get('/file2')
   await srcCore3.checkout(srcDrive.version).get('/file2')
 
-  const { request: request2 } = await multisig.requestDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    srcDrive.version,
-    { force: true }
-  )
+  const { request: request2 } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
   const reqStr2 = z32.encode(request2)
   const responses2 = [signResponse(request2, signers[0])]
 
   await t.exception(
     () =>
-      multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2, {
-        skipTargetChecks: true
-      }),
+      multisig
+        .commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2, {
+          skipTargetChecks: true
+        })
+        .done(),
     /TARGET_NOT_EMPTY/,
     'target not empty error'
   )
 
   await t.exception(
-    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2),
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2).done(),
     /TARGET_CORE_INSUFFICIENT_PEERS: db/,
     'target not well seeded error'
   )
@@ -1176,7 +1152,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await MultisigUtil.waitUntilSufficientPeers(tgtBlobsCore)
 
   await t.exception(
-    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2),
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2).done(),
     /TARGET_CORE_NOT_FULLY_SEEDED/,
     'target not fully seeded error'
   )
@@ -1191,7 +1167,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await MultisigUtil.waitUntilFullySeeded(tgtCore)
 
   await t.exception(
-    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2),
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2).done(),
     /TARGET_CORE_NOT_FULLY_SEEDED: blobs/,
     'target blobs not fully seeded error'
   )
@@ -1204,7 +1180,9 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   await MultisigUtil.waitUntilFullySeeded(tgtBlobsCore)
 
-  const commitPromise2 = multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
+  const commitPromise2 = multisig
+    .commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
+    .done()
 
   for (let i = 0; i < srcDrive.db.core.length; i++) {
     await tgtCopy4.db.core.get(i)
@@ -1248,18 +1226,14 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     await badCopy3.getBlobsLength(badSrcDrive.version)
     await MultisigUtil.waitUntilFullySeeded(badSrcDrive.db.core)
 
-    const { request: request3 } = await multisig.requestDrive(
-      publicKeys,
-      namespace,
-      badSrcDrive,
-      badSrcDrive.version,
-      { force: true }
-    )
+    const { request: request3 } = await multisig
+      .requestDrive(publicKeys, namespace, badSrcDrive, badSrcDrive.version, { force: true })
+      .done()
     const reqStr3 = z32.encode(request3)
     const responses3 = [signResponse(request3, signers[0])]
     await t.exception(
       async () => {
-        await multisig.commitDrive(publicKeys, namespace, badSrcDrive, reqStr3, responses3)
+        await multisig.commitDrive(publicKeys, namespace, badSrcDrive, reqStr3, responses3).done()
       },
       /INCOMPATIBLE_SOURCE_AND_TARGET/,
       'corruption error'

@@ -42,7 +42,7 @@ End users most likely want to use [hyper-multisig-cli](https://github.com/holepu
   await store.ready()
 
   const multisig = new HyperMultisig(store, swarm)
-  const { manifest, core } = await multisig.createCore(publicKeys, namespace)
+  const { manifest, core } = await multisig.createCore(publicKeys, namespace).done()
   ```
 
 - Step 3: Generate a signing request based on a normal core (non-multisig) with the manifest from the previous step.
@@ -56,7 +56,7 @@ End users most likely want to use [hyper-multisig-cli](https://github.com/holepu
   srcCore.append('hello world 3')
 
   const multisig = new HyperMultisig(store)
-  const { request } = await multisig.requestCore(publicKeys, namespace, srcCore, 3)
+  const { request } = await multisig.requestCore(publicKeys, namespace, srcCore, 3).done()
   ```
 
 - Step 4: Use [hypercore-sign](https://github.com/holepunchto/hypercore-sign) to sign the signing request to generate a signature. Later, signatures from all signers will be collected to sign the multisig core.
@@ -72,5 +72,5 @@ End users most likely want to use [hyper-multisig-cli](https://github.com/holepu
   const signatures = [signature1, signature2, ...]
 
   const multisig = new HyperMultisig(store, swarm)
-  await multisig.commitCore(publicKeys, namespace, srcCore, request, signatures)
+  await multisig.commitCore(publicKeys, namespace, srcCore, request, signatures).done()
   ```
