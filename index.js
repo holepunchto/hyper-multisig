@@ -20,6 +20,7 @@
  * }} CoreInfo
  */
 
+const { EventEmitter } = require('events')
 const cenc = require('compact-encoding')
 const CoreSign = require('hypercore-sign')
 const SignRequest = require('hypercore-signing-request')
@@ -66,190 +67,235 @@ class HyperMultisig {
     return { manifest, key, core, blobsManifest, blobsKey, blobsCore }
   }
 
-  async requestCore(
+  requestCore(
     publicKeys,
     namespace,
     srcCore,
     length,
     { force = false, quorum, peerUpdateTimeout } = {}
   ) {
-    await srcCore.ready()
-    this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
-    await srcCore.download({ start: 0, end: length }).done()
+    return new HyperMultisigRunner(async (runner) => {
+      await srcCore.ready()
+      this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
+      await srcCore.download({ start: 0, end: length }).done()
 
-    if (!force) await MultisigUtil.verifyCoreRequestable(srcCore, length, { peerUpdateTimeout })
+      if (!force) await MultisigUtil.verifyCoreRequestable(srcCore, length, { peerUpdateTimeout })
 
-    const manifest = MultisigUtil.getManifest(publicKeys, namespace, { quorum })
-    const request = await SignRequest.generate(srcCore, { manifest, length })
-    return { manifest, request }
+      const manifest = MultisigUtil.getManifest(publicKeys, namespace, { quorum })
+      const request = await SignRequest.generate(srcCore, { manifest, length })
+      return { manifest, request }
+    })
   }
 
-  async requestDrive(
+  requestDrive(
     publicKeys,
     namespace,
     srcDrive,
     length,
     { force = false, quorum, peerUpdateTimeout } = {}
   ) {
-    await srcDrive.ready()
-    this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
-    await srcDrive.getBlobs()
-    length = length || srcDrive.core.length
+    return new HyperMultisigRunner(async (runner) => {
+      await srcDrive.ready()
+      this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
+      await srcDrive.getBlobs()
+      length = length || srcDrive.core.length
 
-    if (!force) {
-      await MultisigUtil.verifyCoreRequestable(srcDrive.core, length, {
-        peerUpdateTimeout,
-        coreId: 'db'
-      })
-      const contentLength = await srcDrive.getBlobsLength(length)
-      await MultisigUtil.verifyCoreRequestable(srcDrive.blobs.core, contentLength, {
-        peerUpdateTimeout,
-        coreId: 'blobs'
-      })
-    }
-
-    const manifest = MultisigUtil.getManifest(publicKeys, namespace, { quorum })
-    const request = await SignRequest.generateDrive(srcDrive, { manifest, length })
-    return { manifest, request }
-  }
-
-  async commitCore(
-    publicKeys,
-    namespace,
-    srcCore,
-    request,
-    responses,
-    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
-  ) {
-    await srcCore.ready()
-    this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
-
-    const { manifest, core } = await this.createCore(publicKeys, namespace, { quorum })
-    this.swarm.join(core.discoveryKey)
-
-    const { length } = SignRequest.decode(z32.decode(request))
-
-    if (!force) {
-      await MultisigUtil.verifyCoreCommittable(srcCore, core, length, {
-        skipTargetChecks,
-        peerUpdateTimeout
-      })
-    }
-
-    const signResponses = []
-    for (const response of responses) {
-      const res = cenc.decode(CoreSign.messages.Response, z32.decode(response))
-      await CoreSign.verify(response, request, z32.encode(res.publicKey))
-      const publicKeyHex = res.publicKey.toString('hex')
-      signResponses[publicKeyHex] = res
-    }
-    const obtainedQuorum = Object.keys(signResponses).length
-    if (!dryRun && obtainedQuorum < manifest.quorum) {
-      throw new Error(`Insufficient quorum: ${obtainedQuorum} / ${manifest.quorum}`)
-    }
-
-    // NOTE: the ordering is important here, must map to signers ordering
-    const signatures = manifest.signers.map((signer) => {
-      const publicKeyHex = signer.publicKey.toString('hex')
-      return signResponses[publicKeyHex]?.signatures[0]
-    })
-
-    const batch = await MultisigUtil.signCore(core, srcCore, signatures, {
-      end: length,
-      commit: !dryRun
-    })
-
-    if (!force) {
-      await MultisigUtil.verifyCoreCommitted(core)
-    }
-
-    const result = {
-      destCore: await MultisigUtil.getCoreInfo(core),
-      srcCore: await MultisigUtil.getCoreInfo(srcCore),
-      batch
-    }
-    return { manifest, core, quorum: obtainedQuorum, result }
-  }
-
-  async commitDrive(
-    publicKeys,
-    namespace,
-    srcDrive,
-    request,
-    responses,
-    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
-  ) {
-    await srcDrive.ready()
-    this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
-    await srcDrive.getBlobs()
-
-    const { manifest, core, blobsCore } = await this.createDrive(publicKeys, namespace, { quorum })
-    this.swarm.join(core.discoveryKey)
-
-    const { length, content } = SignRequest.decode(z32.decode(request))
-    const blobsLength = content.length
-
-    if (!force) {
-      await MultisigUtil.verifyCoreCommittable(srcDrive.db.core, core, length, {
-        skipTargetChecks,
-        peerUpdateTimeout,
-        coreId: 'db'
-      })
-      await MultisigUtil.verifyCoreCommittable(srcDrive.blobs.core, blobsCore, blobsLength, {
-        skipTargetChecks,
-        peerUpdateTimeout,
-        coreId: 'blobs'
-      })
-    }
-
-    const signResponses = []
-    for (const response of responses) {
-      const res = cenc.decode(CoreSign.messages.Response, z32.decode(response))
-      await CoreSign.verify(response, request, z32.encode(res.publicKey))
-      const publicKeyHex = res.publicKey.toString('hex')
-      signResponses[publicKeyHex] = res
-    }
-    const obtainedQuorum = Object.keys(signResponses).length
-    if (!dryRun && obtainedQuorum < manifest.quorum) {
-      throw new Error(`Insufficient quorum: ${obtainedQuorum} / ${manifest.quorum}`)
-    }
-
-    const allSignatures = manifest.signers.map((signer) => {
-      const publicKeyHex = signer.publicKey.toString('hex')
-      return signResponses[publicKeyHex]?.signatures
-    })
-    // NOTE: the ordering is important here, must map to signers ordering
-    const signatures = allSignatures.map((item) => item?.[0])
-    const blobsSignatures = allSignatures.map((item) => item?.[1])
-
-    const { batch, blobsBatch } = await MultisigUtil.signDrive(
-      core,
-      srcDrive.core,
-      signatures,
-      blobsCore,
-      srcDrive.blobs.core,
-      blobsSignatures,
-      { end: length, blobsEnd: blobsLength, commit: !dryRun }
-    )
-
-    if (!force) {
-      await MultisigUtil.verifyCoreCommitted(core)
-      await MultisigUtil.verifyCoreCommitted(blobsCore)
-    }
-
-    const result = {
-      db: {
-        destCore: await MultisigUtil.getCoreInfo(core),
-        srcCore: await MultisigUtil.getCoreInfo(srcDrive.core),
-        batch
-      },
-      blobs: {
-        destCore: await MultisigUtil.getCoreInfo(blobsCore),
-        srcCore: await MultisigUtil.getCoreInfo(srcDrive.blobs.core),
-        batch: blobsBatch
+      if (!force) {
+        await MultisigUtil.verifyCoreRequestable(srcDrive.core, length, {
+          peerUpdateTimeout,
+          coreId: 'db'
+        })
+        const contentLength = await srcDrive.getBlobsLength(length)
+        await MultisigUtil.verifyCoreRequestable(srcDrive.blobs.core, contentLength, {
+          peerUpdateTimeout,
+          coreId: 'blobs'
+        })
       }
-    }
-    return { manifest, core, blobsCore, quorum: obtainedQuorum, result }
+
+      const manifest = MultisigUtil.getManifest(publicKeys, namespace, { quorum })
+      const request = await SignRequest.generateDrive(srcDrive, { manifest, length })
+      return { manifest, request }
+    })
+  }
+
+  commitCore(
+    publicKeys,
+    namespace,
+    srcCore,
+    request,
+    responses,
+    {
+      quorum,
+      dryRun,
+      force = false,
+      skipTargetChecks = false,
+      peerUpdateTimeout,
+      minFullCopies = 2
+    } = {}
+  ) {
+    return new HyperMultisigRunner(async (runner) => {
+      await srcCore.ready()
+      this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
+
+      const { manifest, core } = await this.createCore(publicKeys, namespace, { quorum })
+      this.swarm.join(core.discoveryKey)
+
+      const { length } = SignRequest.decode(z32.decode(request))
+
+      if (!force) {
+        runner.emit('verify-committable-start')
+        await MultisigUtil.verifyCoreCommittable(srcCore, core, length, {
+          skipTargetChecks,
+          peerUpdateTimeout
+        })
+      }
+
+      const signResponses = []
+      for (const response of responses) {
+        const res = cenc.decode(CoreSign.messages.Response, z32.decode(response))
+        await CoreSign.verify(response, request, z32.encode(res.publicKey))
+        const publicKeyHex = res.publicKey.toString('hex')
+        signResponses[publicKeyHex] = res
+      }
+      const obtainedQuorum = Object.keys(signResponses).length
+      if (!dryRun && obtainedQuorum < manifest.quorum) {
+        throw new Error(`Insufficient quorum: ${obtainedQuorum} / ${manifest.quorum}`)
+      }
+
+      // NOTE: the ordering is important here, must map to signers ordering
+      const signatures = manifest.signers.map((signer) => {
+        const publicKeyHex = signer.publicKey.toString('hex')
+        return signResponses[publicKeyHex]?.signatures[0]
+      })
+
+      runner.emit('commit-start')
+      const batch = await MultisigUtil.signCore(core, srcCore, signatures, {
+        end: length,
+        commit: !dryRun
+      })
+
+      if (!force) {
+        runner.emit('verify-committed-start', core.key)
+        await MultisigUtil.verifyCoreCommitted(core, { minPeers: minFullCopies })
+      }
+
+      const result = {
+        destCore: await MultisigUtil.getCoreInfo(core),
+        srcCore: await MultisigUtil.getCoreInfo(srcCore),
+        batch
+      }
+
+      return { manifest, core, quorum: obtainedQuorum, result }
+    })
+  }
+
+  commitDrive(
+    publicKeys,
+    namespace,
+    srcDrive,
+    request,
+    responses,
+    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+  ) {
+    return new HyperMultisigRunner(async (runner) => {
+      await srcDrive.ready()
+      this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
+      await srcDrive.getBlobs()
+
+      const { manifest, core, blobsCore } = await this.createDrive(publicKeys, namespace, {
+        quorum
+      })
+      this.swarm.join(core.discoveryKey)
+
+      const { length, content } = SignRequest.decode(z32.decode(request))
+      const blobsLength = content.length
+
+      if (!force) {
+        runner.emit('verify-committable-start')
+        await MultisigUtil.verifyCoreCommittable(srcDrive.db.core, core, length, {
+          skipTargetChecks,
+          peerUpdateTimeout,
+          coreId: 'db'
+        })
+        await MultisigUtil.verifyCoreCommittable(srcDrive.blobs.core, blobsCore, blobsLength, {
+          skipTargetChecks,
+          peerUpdateTimeout,
+          coreId: 'blobs'
+        })
+      }
+
+      const signResponses = []
+      for (const response of responses) {
+        const res = cenc.decode(CoreSign.messages.Response, z32.decode(response))
+        await CoreSign.verify(response, request, z32.encode(res.publicKey))
+        const publicKeyHex = res.publicKey.toString('hex')
+        signResponses[publicKeyHex] = res
+      }
+      const obtainedQuorum = Object.keys(signResponses).length
+      if (!dryRun && obtainedQuorum < manifest.quorum) {
+        throw new Error(`Insufficient quorum: ${obtainedQuorum} / ${manifest.quorum}`)
+      }
+
+      const allSignatures = manifest.signers.map((signer) => {
+        const publicKeyHex = signer.publicKey.toString('hex')
+        return signResponses[publicKeyHex]?.signatures
+      })
+      // NOTE: the ordering is important here, must map to signers ordering
+      const signatures = allSignatures.map((item) => item?.[0])
+      const blobsSignatures = allSignatures.map((item) => item?.[1])
+
+      runner.emit('commit-start')
+      const { batch, blobsBatch } = await MultisigUtil.signDrive(
+        core,
+        srcDrive.core,
+        signatures,
+        blobsCore,
+        srcDrive.blobs.core,
+        blobsSignatures,
+        { end: length, blobsEnd: blobsLength, commit: !dryRun }
+      )
+
+      if (!force) {
+        runner.emit('verify-committed-start', core.key)
+        await MultisigUtil.verifyCoreCommitted(core)
+        await MultisigUtil.verifyCoreCommitted(blobsCore)
+      }
+
+      const result = {
+        db: {
+          destCore: await MultisigUtil.getCoreInfo(core),
+          srcCore: await MultisigUtil.getCoreInfo(srcDrive.core),
+          batch
+        },
+        blobs: {
+          destCore: await MultisigUtil.getCoreInfo(blobsCore),
+          srcCore: await MultisigUtil.getCoreInfo(srcDrive.blobs.core),
+          batch: blobsBatch
+        }
+      }
+      return { manifest, core, blobsCore, quorum: obtainedQuorum, result }
+    })
+  }
+}
+
+class HyperMultisigRunner extends EventEmitter {
+  constructor(handler) {
+    super()
+    this.handler = handler
+
+    this._running = this._run()
+    // This will always be awaited, but to avoid uncaughts in case it's not awaited in the same tick
+    this._running.catch(() => {})
+  }
+
+  async _run() {
+    // Tick so the user can register event listeners
+    await new Promise((resolve) => queueMicrotask(resolve))
+    return await this.handler(this)
+  }
+
+  async done() {
+    return await this._running
   }
 }
 
