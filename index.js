@@ -137,7 +137,7 @@ class HyperMultisig {
       await srcCore.ready()
       this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
 
-      const { manifest, core } = await this.multisig.createCore(publicKeys, namespace, { quorum })
+      const { manifest, core } = await this.createCore(publicKeys, namespace, { quorum })
       this.swarm.join(core.discoveryKey)
 
       const { length } = SignRequest.decode(z32.decode(request))
@@ -202,7 +202,7 @@ class HyperMultisig {
       this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
       await srcDrive.getBlobs()
 
-      const { manifest, core, blobsCore } = await this.multisig.createDrive(publicKeys, namespace, {
+      const { manifest, core, blobsCore } = await this.createDrive(publicKeys, namespace, {
         quorum
       })
       this.swarm.join(core.discoveryKey)
