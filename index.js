@@ -143,7 +143,7 @@ class HyperMultisig {
       const { length } = SignRequest.decode(z32.decode(request))
 
       if (!force) {
-        runner.emit('verify-committable-start')
+        runner.emit('verify-committable-start', srcCore.key, core.key)
         await MultisigUtil.verifyCoreCommittable(srcCore, core, length, {
           skipTargetChecks,
           peerUpdateTimeout
@@ -211,7 +211,7 @@ class HyperMultisig {
       const blobsLength = content.length
 
       if (!force) {
-        runner.emit('verify-committable-start')
+        runner.emit('verify-committable-start', srcDrive.db.core.key, core.key)
         await MultisigUtil.verifyCoreCommittable(srcDrive.db.core, core, length, {
           skipTargetChecks,
           peerUpdateTimeout,
