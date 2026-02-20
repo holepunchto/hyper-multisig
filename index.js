@@ -174,7 +174,7 @@ class HyperMultisig {
         commit: !dryRun
       })
 
-      if (!force) {
+      if (!force && !dryRun) {
         runner.emit('verify-committed-start', core.key)
         await MultisigUtil.verifyCoreCommitted(core, { minPeers: minFullCopies })
       }
@@ -255,7 +255,7 @@ class HyperMultisig {
         { end: length, blobsEnd: blobsLength, commit: !dryRun }
       )
 
-      if (!force) {
+      if (!force && !dryRun) {
         runner.emit('verify-committed-start', core.key)
         await MultisigUtil.verifyCoreCommitted(core)
         await MultisigUtil.verifyCoreCommitted(blobsCore)
