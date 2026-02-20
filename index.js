@@ -74,7 +74,7 @@ class HyperMultisig {
     length,
     { force = false, quorum, peerUpdateTimeout } = {}
   ) {
-    return new Runner(async (runner) => {
+    return new HyperMultisigRunner(async (runner) => {
       await srcCore.ready()
       this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
       await srcCore.download({ start: 0, end: length }).done()
@@ -94,7 +94,7 @@ class HyperMultisig {
     length,
     { force = false, quorum, peerUpdateTimeout } = {}
   ) {
-    return new Runner(async (runner) => {
+    return new HyperMultisigRunner(async (runner) => {
       await srcDrive.ready()
       this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
       await srcDrive.getBlobs()
@@ -133,7 +133,7 @@ class HyperMultisig {
       minFullCopies = 2
     } = {}
   ) {
-    return new Runner(async (runner) => {
+    return new HyperMultisigRunner(async (runner) => {
       await srcCore.ready()
       this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
 
@@ -197,7 +197,7 @@ class HyperMultisig {
     responses,
     { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
   ) {
-    return new Runner(async (runner) => {
+    return new HyperMultisigRunner(async (runner) => {
       await srcDrive.ready()
       this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
       await srcDrive.getBlobs()
@@ -278,7 +278,7 @@ class HyperMultisig {
   }
 }
 
-class Runner extends EventEmitter {
+class HyperMultisigRunner extends EventEmitter {
   constructor(handler) {
     super()
     this.handler = handler
