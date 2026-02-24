@@ -77,7 +77,6 @@ class HyperMultisig {
     return new HyperMultisigRunner(async (runner) => {
       await srcCore.ready()
       this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
-      await srcCore.download({ start: 0, end: length }).done()
 
       if (!force) await MultisigUtil.verifyCoreRequestable(srcCore, length, { peerUpdateTimeout })
 
