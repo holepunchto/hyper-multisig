@@ -93,7 +93,7 @@ Options include:
 }
 ```
 
-Call `await runner.done()` to get `{ manifest, core, quorum, result }`.
+Call `await runner.done()` to get `{ manifest, core, quorum, result }` where `quorum` is the amount of valid signatures.
 
 The runner emits events during the commit process:
 
