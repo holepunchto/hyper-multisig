@@ -53,7 +53,7 @@ Generate a signing request from a source core.
 - `publicKeys` - array of z32-encoded public keys
 - `namespace` - namespace string
 - `srcCore` - source Hypercore to create a request for
-- `length` - number of blocks to include in the request
+- `length` - length of the source core to use for the request
 
 Options include:
 
