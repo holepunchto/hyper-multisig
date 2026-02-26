@@ -31,12 +31,7 @@ Create a multisig hypercore.
 - `namespace` - string to avoid collisions (the combination of signers and namespace must be globally unique, as it deterministically defines the key of the resulting multisig hypercore)
 
 Options include:
-
-```js
-{
-  quorum // minimum number of signatures required, defaults to floor(publicKeys.length / 2) + 1
-}
-```
+- quorum: minimum number of signatures required, defaults to half of public keys + 1
 
 Returns `{ manifest, key, core }` where `core` is a read-only Hypercore.
 
@@ -50,7 +45,7 @@ Same parameters and options as `createCore`.
 
 Generate a signing request from a source core.
 
-- `publicKeys` - array of z32-encoded public keys
+- `publicKeys` - array of public keys
 - `namespace` - namespace string
 - `srcCore` - source Hypercore to create a request for
 - `length` - length of the source core to use for the request
@@ -65,7 +60,7 @@ Options include:
 }
 ```
 
-Call `await runner.done()` to get `{ manifest, request }`. The `request` buffer can be z32-encoded and passed to external signers.
+Call `await runner.done()` to get `{ manifest, request }`. The `request` is the signing request, as a buffer.
 
 #### `const runner = multisig.requestDrive(publicKeys, namespace, srcDrive, length, [options])`
 
@@ -79,11 +74,11 @@ Call `await runner.done()` to get `{ manifest, request }`.
 
 Commit signed data to a multisig core.
 
-- `publicKeys` - array of z32-encoded public keys
+- `publicKeys` - array of public keys
 - `namespace` - namespace string
 - `srcCore` - source Hypercore that was signed
-- `request` - the signing request (z32-encoded string or buffer)
-- `responses` - array of signed responses from signers (z32-encoded strings or buffers)
+- `request` - the signing request
+- `responses` - array of signed responses from signers
 
 Options include:
 
