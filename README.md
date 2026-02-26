@@ -46,11 +46,9 @@ Create a multisig hyperdrive (with associated blobs core).
 
 Same parameters and options as `createCore`.
 
-Returns `{ manifest, key, core, blobsManifest, blobsKey, blobsCore }`.
-
 #### `const runner = multisig.requestCore(publicKeys, namespace, srcCore, length, [options])`
 
-Generate a signing request for a source core.
+Generate a signing request from a source core.
 
 - `publicKeys` - array of z32-encoded public keys
 - `namespace` - namespace string
