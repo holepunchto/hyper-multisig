@@ -31,6 +31,7 @@ Create a multisig hypercore.
 - `namespace` - string to avoid collisions (the combination of signers and namespace must be globally unique, as it deterministically defines the key of the resulting multisig hypercore)
 
 Options include:
+
 - quorum: minimum number of signatures required, defaults to half of public keys + 1
 
 Returns `{ manifest, key, core }` where `core` is a read-only Hypercore.
