@@ -11,7 +11,7 @@ End users most likely want to use [hyper-multisig-cli](https://github.com/holepu
 ## Installation
 
 ```
-npm install hyper-multisig
+npm install -g hyper-multisig
 ```
 
 ## API
