@@ -98,8 +98,8 @@ Call `await runner.done()` to get `{ manifest, core, quorum, result }` where `qu
 The runner emits events during the commit process:
 
 - `'verify-committable-start'` - fired with `(srcCoreKey, destCoreKey)`
-- `'commit-start'` - fired when commit begins
-- `'verify-committed-start'` - fired with `(destCoreKey)` after commit
+- `'commit-start'` - fired when the commit begins
+- `'verify-committed-start'` - fired with `(destCoreKey)` after the commit completes
 
 #### `const runner = multisig.commitDrive(publicKeys, namespace, srcDrive, request, responses, [options])`
 
