@@ -86,8 +86,8 @@ Options include:
 {
   quorum, // override default quorum
   dryRun: false, // perform validation without committing
-  force: false, // skip verification checks
-  skipTargetChecks: false, // skip target core checks
+  force: false, // advanced option, and dangerous
+  skipTargetChecks: false, // only useful for the first commit
   peerUpdateTimeout: 5000, // timeout in ms for peer updates
   minFullCopies: 2 // minimum number of peers with a full copy of the core
 }
