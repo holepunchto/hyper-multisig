@@ -4,13 +4,15 @@
 
 Create and manage multisig hypercores and hyperdrives.
 
-```
-npm install hyper-multisig
-```
-
 Includes sanity checks to avoid common mistakes and risky releases (detecting conflicts before committing, ensuring all cores are seeded by multiple peers, etc.)
 
 End users most likely want to use [hyper-multisig-cli](https://github.com/holepunchto/hyper-multisig-cli) instead of interacting directly with this module.
+
+## Installation
+
+```
+npm install hyper-multisig
+```
 
 ## API
 
