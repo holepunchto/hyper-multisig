@@ -96,21 +96,28 @@ class HyperMultisig {
     return new HyperMultisigRunner(async (runner) => {
       await srcDrive.ready()
       this.swarm.join(srcDrive.discoveryKey, { client: true, server: false })
+      runner.emit('getting-src-blobs')
       await srcDrive.getBlobs()
       length = length || srcDrive.core.length
 
       if (!force) {
+        runner.emit('verify-db-requestable-start')
         await MultisigUtil.verifyCoreRequestable(srcDrive.core, length, {
           peerUpdateTimeout,
           coreId: 'db'
         })
+
+        runner.emit('getting-blobs-length')
         const contentLength = await srcDrive.getBlobsLength(length)
+
+        runner.emit('verify-blobs-requestable-start')
         await MultisigUtil.verifyCoreRequestable(srcDrive.blobs.core, contentLength, {
           peerUpdateTimeout,
           coreId: 'blobs'
         })
       }
 
+      runner.emit('creating-drive')
       const manifest = MultisigUtil.getManifest(publicKeys, namespace, { quorum })
       const request = await SignRequest.generateDrive(srcDrive, { manifest, length })
       return { manifest, request }
