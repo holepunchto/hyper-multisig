@@ -37,6 +37,8 @@ class HyperMultisig {
     this.swarm = swarm
   }
 
+  static getCoreKey = MultisigUtil.getCoreKey
+
   /**
    * @param {string[]} publicKeys
    * @param {string} namespace
