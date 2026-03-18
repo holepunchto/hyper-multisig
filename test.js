@@ -14,7 +14,9 @@ const Hyperswarm = require('hyperswarm')
 const sodium = require('sodium-native')
 const z32 = require('z32')
 
-const MultisigUtil = require('./lib/util')
+const { getCoreKey } = require('./lib/core')
+const { signCore, signDrive } = require('./lib/sign')
+const { waitUntilSufficientPeers, waitUntilFullySeeded } = require('./lib/verify')
 const Multisig = require('.')
 
 test('create core', async (t) => {
@@ -64,7 +66,7 @@ test('sign core (dry-run)', async (t) => {
 
   const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
-  const batch = await MultisigUtil.signCore(core, fromCore, signatures)
+  const batch = await signCore(core, fromCore, signatures)
 
   t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
   t.is(batch.length, fromCore.length, 'batch length is correct')
@@ -87,7 +89,7 @@ test('sign core', async (t) => {
 
   const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
-  const batch = await MultisigUtil.signCore(core, fromCore, signatures, { commit: true })
+  const batch = await signCore(core, fromCore, signatures, { commit: true })
 
   t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
   t.is(batch.length, fromCore.length, 'batch length is correct')
@@ -116,7 +118,7 @@ test('sign core multiple times (dry-run)', async (t) => {
   const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures)
+    const batch = await signCore(core, fromCore, signatures)
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [1]')
     t.is(batch.length, fromCore.length, 'batch length is correct [1]')
     t.is(
@@ -129,7 +131,7 @@ test('sign core multiple times (dry-run)', async (t) => {
   }
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures)
+    const batch = await signCore(core, fromCore, signatures)
     t.is(batch.length, fromCore.length, 'batch length is correct [2]')
     t.is(
       batch.treeHash,
@@ -145,7 +147,7 @@ test('sign core multiple times (dry-run)', async (t) => {
   await fromCore.append(b4a.from('5'))
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures)
+    const batch = await signCore(core, fromCore, signatures)
     t.is(batch.length, fromCore.length, 'batch length is correct [3]')
     t.is(
       batch.treeHash,
@@ -172,7 +174,7 @@ test('sign core multiple times', async (t) => {
   const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures, { commit: true })
+    const batch = await signCore(core, fromCore, signatures, { commit: true })
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [1]')
     t.is(batch.length, fromCore.length, 'batch length is correct [1]')
     t.is(
@@ -190,7 +192,7 @@ test('sign core multiple times', async (t) => {
   }
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures)
+    const batch = await signCore(core, fromCore, signatures)
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [2]')
     t.is(batch.length, fromCore.length, 'batch length is correct [2]')
     t.is(
@@ -203,7 +205,7 @@ test('sign core multiple times', async (t) => {
   }
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures, { commit: true })
+    const batch = await signCore(core, fromCore, signatures, { commit: true })
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [3]')
     t.is(batch.length, fromCore.length, 'batch length is correct [3]')
     t.is(
@@ -222,7 +224,7 @@ test('sign core multiple times', async (t) => {
   const { signatures: signatures2 } = await requestAndSign(signers, fromCore, manifest)
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures2)
+    const batch = await signCore(core, fromCore, signatures2)
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [4]')
     t.is(batch.length, fromCore.length, 'batch length is correct [4]')
     t.is(
@@ -235,7 +237,7 @@ test('sign core multiple times', async (t) => {
   }
 
   {
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures2, { commit: true })
+    const batch = await signCore(core, fromCore, signatures2, { commit: true })
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [5]')
     t.is(batch.length, fromCore.length, 'batch length is correct [5]')
     t.is(
@@ -264,7 +266,7 @@ test('sign core remotely', async (t) => {
   {
     const { manifest, core } = await multisig.createCore(publicKeys, namespace)
     const { signatures } = await requestAndSign(signers, fromCore, manifest)
-    const batch = await MultisigUtil.signCore(core, fromCore, signatures, { commit: true })
+    const batch = await signCore(core, fromCore, signatures, { commit: true })
 
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
     t.is(batch.length, fromCore.length, 'batch length is correct')
@@ -301,7 +303,7 @@ test('sign core remotely', async (t) => {
     const { signatures } = await requestAndSign(signers, fromCore2, manifest, {
       length: fromCore.length
     })
-    const batch = await MultisigUtil.signCore(core, fromCore2, signatures, { commit: true })
+    const batch = await signCore(core, fromCore2, signatures, { commit: true })
 
     t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [2]')
     t.is(batch.length, fromCore2.length, 'batch length is correct [2]')
@@ -332,7 +334,7 @@ test('sign drive', async (t) => {
 
   const fromCore = fromDrive.core
   const fromBlobsCore = fromDrive.blobs.core
-  const { batch, blobsBatch } = await MultisigUtil.signDrive(
+  const { batch, blobsBatch } = await signDrive(
     core,
     fromCore,
     signatures,
@@ -382,7 +384,7 @@ test('sign drive remotely', async (t) => {
     const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive, manifest, {
       isDrive: true
     })
-    const { batch, blobsBatch } = await MultisigUtil.signDrive(
+    const { batch, blobsBatch } = await signDrive(
       core,
       fromCore,
       signatures,
@@ -459,7 +461,7 @@ test('sign drive remotely', async (t) => {
       length: fromCore.length,
       isDrive: true
     })
-    const { batch, blobsBatch } = await MultisigUtil.signDrive(
+    const { batch, blobsBatch } = await signDrive(
       core,
       fromCore2,
       signatures,
@@ -595,7 +597,7 @@ test('request core sanity checks throw correct errors', async (t) => {
   const copy3 = store3.get(srcCore.key)
   await copy3.ready()
   swarm3.join(copy3.discoveryKey)
-  await MultisigUtil.waitUntilSufficientPeers(srcCore)
+  await waitUntilSufficientPeers(srcCore)
 
   await t.exception(
     async () => {
@@ -607,7 +609,7 @@ test('request core sanity checks throw correct errors', async (t) => {
 
   await copy2.get(0)
   await copy3.get(0)
-  await MultisigUtil.waitUntilFullySeeded(srcCore)
+  await waitUntilFullySeeded(srcCore)
 
   const { manifest, request } = await multisig
     .requestCore(publicKeys, namespace, srcCore, srcCore.length)
@@ -676,7 +678,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await srcCore3.ready()
   srcSwarm3.join(srcCore3.discoveryKey)
 
-  await MultisigUtil.waitUntilSufficientPeers(srcCore)
+  await waitUntilSufficientPeers(srcCore)
 
   await t.exception(
     () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
@@ -687,7 +689,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await srcCore2.get(0)
   await srcCore3.get(0)
 
-  await MultisigUtil.waitUntilFullySeeded(srcCore)
+  await waitUntilFullySeeded(srcCore)
 
   const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     skipTargetChecks: true
@@ -702,7 +704,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   const commitPromise = commitCore.done()
 
-  const tgtCoreKey = MultisigUtil.getCoreKey(publicKeys, namespace)
+  const tgtCoreKey = getCoreKey(publicKeys, namespace)
 
   const tgtCopy1 = tgtStore1.get(tgtCoreKey)
   await tgtCopy1.ready()
@@ -734,7 +736,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await srcCore.append('block1')
   await srcCore2.get(1)
   await srcCore3.get(1)
-  await MultisigUtil.waitUntilFullySeeded(srcCore)
+  await waitUntilFullySeeded(srcCore)
 
   const { request: request2 } = await multisig
     .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
@@ -771,7 +773,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await tgtCopy6.ready()
   tgtSwarm6.join(tgtCopy6.discoveryKey)
 
-  await MultisigUtil.waitUntilSufficientPeers(tgtCore)
+  await waitUntilSufficientPeers(tgtCore)
 
   await t.exception(
     () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr2, responses2).done(),
@@ -783,7 +785,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
   await tgtCopy5.get(0)
   await tgtCopy6.get(0)
 
-  await MultisigUtil.waitUntilFullySeeded(tgtCore)
+  await waitUntilFullySeeded(tgtCore)
 
   const commitPromise2 = multisig
     .commitCore(publicKeys, namespace, srcCore, reqStr2, responses2)
@@ -818,7 +820,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
       badCopy3.get(1),
       badCopy3.get(2)
     ])
-    await MultisigUtil.waitUntilFullySeeded(badSrcCore)
+    await waitUntilFullySeeded(badSrcCore)
 
     const { request: request3 } = await multisig
       .requestCore(publicKeys, namespace, badSrcCore, badSrcCore.length, { force: true })
@@ -931,8 +933,8 @@ test('request drive sanity checks throw correct errors', async (t) => {
   const copy3 = new Hyperdrive(store3, srcDrive.key)
   await copy3.ready()
   swarm3.join(copy3.discoveryKey)
-  await MultisigUtil.waitUntilSufficientPeers(srcDrive.db.core)
-  await MultisigUtil.waitUntilSufficientPeers(srcDrive.blobs.core)
+  await waitUntilSufficientPeers(srcDrive.db.core)
+  await waitUntilSufficientPeers(srcDrive.blobs.core)
 
   await t.exception(
     async () => {
@@ -947,7 +949,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
     await copy2.db.core.get(i)
     await copy3.db.core.get(i)
   }
-  await MultisigUtil.waitUntilFullySeeded(srcDrive.db.core)
+  await waitUntilFullySeeded(srcDrive.db.core)
 
   await t.exception(
     async () => {
@@ -959,7 +961,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
 
   await copy2.get('/file')
   await copy3.get('/file')
-  await MultisigUtil.waitUntilFullySeeded(srcDrive.blobs.core)
+  await waitUntilFullySeeded(srcDrive.blobs.core)
 
   const { request, manifest } = await multisig
     .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version)
@@ -1026,8 +1028,8 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await srcCore3.ready()
   srcSwarm3.join(srcCore3.discoveryKey)
 
-  await MultisigUtil.waitUntilSufficientPeers(srcDrive.db.core)
-  await MultisigUtil.waitUntilSufficientPeers(srcDrive.blobs.core)
+  await waitUntilSufficientPeers(srcDrive.db.core)
+  await waitUntilSufficientPeers(srcDrive.blobs.core)
 
   await t.exception(
     () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
@@ -1041,7 +1043,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     await srcCore3.db.core.get(i)
   }
 
-  await MultisigUtil.waitUntilFullySeeded(srcDrive.db.core)
+  await waitUntilFullySeeded(srcDrive.db.core)
 
   await t.exception(
     () =>
@@ -1057,7 +1059,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await srcCore2.get('/file')
   await srcCore3.get('/file')
 
-  await MultisigUtil.waitUntilFullySeeded(srcDrive.blobs.core)
+  await waitUntilFullySeeded(srcDrive.blobs.core)
 
   let verifyCommittableStart = 0
   let commitStart = 0
@@ -1073,7 +1075,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   const commitPromise = commitDrive.done()
 
-  const tgtCoreKey = MultisigUtil.getCoreKey(publicKeys, namespace)
+  const tgtCoreKey = getCoreKey(publicKeys, namespace)
 
   const tgtCopy1 = new Hyperdrive(tgtStore1, tgtCoreKey)
   await tgtCopy1.ready()
@@ -1148,8 +1150,8 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   await tgtCopy6.ready()
   tgtSwarm6.join(tgtCopy6.discoveryKey)
 
-  await MultisigUtil.waitUntilSufficientPeers(tgtCore)
-  await MultisigUtil.waitUntilSufficientPeers(tgtBlobsCore)
+  await waitUntilSufficientPeers(tgtCore)
+  await waitUntilSufficientPeers(tgtBlobsCore)
 
   await t.exception(
     () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2).done(),
@@ -1164,7 +1166,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     await tgtCopy6.db.core.get(i)
   }
 
-  await MultisigUtil.waitUntilFullySeeded(tgtCore)
+  await waitUntilFullySeeded(tgtCore)
 
   await t.exception(
     () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2).done(),
@@ -1178,7 +1180,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     await tgtCopy6.blobs.core.get(i)
   }
 
-  await MultisigUtil.waitUntilFullySeeded(tgtBlobsCore)
+  await waitUntilFullySeeded(tgtBlobsCore)
 
   const commitPromise2 = multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr2, responses2)
@@ -1224,7 +1226,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     await badCopy2.getBlobsLength(badSrcDrive.version)
     await badCopy3.getBlobs()
     await badCopy3.getBlobsLength(badSrcDrive.version)
-    await MultisigUtil.waitUntilFullySeeded(badSrcDrive.db.core)
+    await waitUntilFullySeeded(badSrcDrive.db.core)
 
     const { request: request3 } = await multisig
       .requestDrive(publicKeys, namespace, badSrcDrive, badSrcDrive.version, { force: true })
