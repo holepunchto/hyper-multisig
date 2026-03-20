@@ -5,8 +5,7 @@ const Corestore = require('corestore')
 const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 const idEnc = require('hypercore-id-encoding')
-const SignMessages = require('hypercore-sign/lib/messages')
-const SignSecure = require('hypercore-sign/lib/secure')
+const CoreSign = require('hypercore-sign')
 const SignRequest = require('hypercore-signing-request')
 const createTestnet = require('hyperdht/testnet')
 const Hyperdrive = require('hyperdrive')
@@ -1265,18 +1264,17 @@ function sign(request, signer) {
   }, {})
 
   const decodedReq = SignRequest.decode(request)
-  const signables = SignRequest.signable(clonedSigner.publicKey, decodedReq)
 
   const password = sodium.sodium_malloc(8)
   sodium.randombytes_buf_deterministic(password, clonedSigner.seed)
 
-  const signatures = SignSecure.sign(signables, clonedSigner.secretKey, password)
+  const signatures = CoreSign.sign(decodedReq, clonedSigner.secretKey, password)
   return { clonedSigner, decodedReq, signatures }
 }
 
 function signResponse(request, signer) {
   const { clonedSigner, decodedReq, signatures } = sign(request, signer)
-  const res = cenc.encode(SignMessages.Response, {
+  const res = cenc.encode(CoreSign.Response, {
     version: decodedReq.version,
     requestHash: crypto.hash(request),
     publicKey: clonedSigner.publicKey,
@@ -1315,7 +1313,7 @@ function setupMultisig(namespace = 'holepunchto/my-test', numSigners = 3) {
     const password = sodium.sodium_malloc(8)
     sodium.randombytes_buf_deterministic(password, seed)
 
-    const keys = SignSecure.generateKeys(password)
+    const keys = CoreSign.generateKeys(password)
     signers.push({ ...keys, seed })
   }
   const publicKeys = signers.map((signer) => idEnc.normalize(signer.publicKey))
