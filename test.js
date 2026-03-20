@@ -1268,7 +1268,7 @@ function sign(request, signer) {
   const password = sodium.sodium_malloc(8)
   sodium.randombytes_buf_deterministic(password, clonedSigner.seed)
 
-  const signatures = CoreSign.sign(decodedReq, clonedSigner.secretKey, password)
+  const signatures = CoreSign.sign(request, clonedSigner.secretKey, password)
   return { clonedSigner, decodedReq, signatures }
 }
 
