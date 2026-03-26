@@ -1,6 +1,5 @@
 const b4a = require('b4a')
 const test = require('brittle')
-const cenc = require('compact-encoding')
 const Corestore = require('corestore')
 const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
@@ -1269,13 +1268,13 @@ function sign(request, signer) {
   sodium.randombytes_buf_deterministic(password, clonedSigner.seed)
 
   const response = CoreSign.sign(request, clonedSigner.secretKey, password)
-  const { signatures } = cenc.decode(CoreSign.Response, response)
+  const { signatures } = SignRequest.decodeResponse(response)
   return { clonedSigner, decodedReq, signatures }
 }
 
 function signResponse(request, signer) {
   const { clonedSigner, decodedReq, signatures } = sign(request, signer)
-  const res = cenc.encode(CoreSign.Response, {
+  const res = SignRequest.encodeResponse({
     version: decodedReq.version,
     requestHash: crypto.hash(request),
     publicKey: clonedSigner.publicKey,
