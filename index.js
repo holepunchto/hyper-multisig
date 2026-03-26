@@ -166,7 +166,7 @@ class HyperMultisig {
 
       const signResponses = []
       for (const response of responses) {
-        const res = cenc.decode(CoreSign.Response, z32.decode(response))
+        const res = SignRequest.decodeResponse(z32.decode(response))
         await CoreSign.verify(z32.decode(response), z32.decode(request), res.publicKey)
         const publicKeyHex = res.publicKey.toString('hex')
         signResponses[publicKeyHex] = res
@@ -240,7 +240,7 @@ class HyperMultisig {
 
       const signResponses = []
       for (const response of responses) {
-        const res = cenc.decode(CoreSign.Response, z32.decode(response))
+        const res = SignRequest.decodeResponse(z32.decode(response))
         await CoreSign.verify(z32.decode(response), z32.decode(request), res.publicKey)
         const publicKeyHex = res.publicKey.toString('hex')
         signResponses[publicKeyHex] = res
