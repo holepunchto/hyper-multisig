@@ -21,7 +21,6 @@
  */
 
 const { EventEmitter } = require('events')
-const cenc = require('compact-encoding')
 const CoreSign = require('hypercore-sign')
 const SignRequest = require('hypercore-signing-request')
 const Hyperdrive = require('hyperdrive')
