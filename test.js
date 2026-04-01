@@ -65,12 +65,19 @@ test('sign core (dry-run)', async (t) => {
   const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
   const batch = await signCore(core, fromCore, signatures)
+  const dryRunSignature = batch.signature
 
   t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
   t.is(batch.length, fromCore.length, 'batch length is correct')
   t.is(batch.treeHash, idEnc.normalize(await fromCore.treeHash()), 'batch treeHash is correct')
   t.is(core.length, beforeSigning.length, 'core length is not changed')
   t.alike(await core.treeHash(), beforeSigning.treeHash, 'core treeHash is not changed')
+  t.is(dryRunSignature !== null, true, 'dryrun includes signature if quorum met')
+  t.is(core.length, 0, 'did not commit')
+
+  const commitBatch = await signCore(core, fromCore, signatures, { commit: true })
+  t.is(core.length, 3, 'did commit')
+  t.is(commitBatch.signature, dryRunSignature, 'sanity check: same signature with commit')
 })
 
 test('sign core', async (t) => {
