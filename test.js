@@ -355,8 +355,14 @@ test('sign drive', async (t) => {
 
     dryrunDbSignature = batch.signature
     dryrunBlobsSignature = blobsBatch.signature
-    t.ok(dryrunDbSignature != null, 'db signature set when quorum met')
-    t.ok(dryrunBlobsSignature != null, 'blobs signature set when quorum met')
+    t.ok(
+      dryrunDbSignature !== null && dryrunDbSignature !== undefined,
+      'db signature set when quorum met'
+    )
+    t.ok(
+      dryrunBlobsSignature !== null && dryrunDbSignature !== undefined,
+      'blobs signature set when quorum met'
+    )
   }
 
   const { batch, blobsBatch } = await signDrive(
