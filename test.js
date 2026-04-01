@@ -339,6 +339,26 @@ test('sign drive', async (t) => {
 
   const fromCore = fromDrive.core
   const fromBlobsCore = fromDrive.blobs.core
+
+  let dryrunDbSignature = null
+  let dryrunBlobsSignature = null
+  {
+    const { batch, blobsBatch } = await signDrive(
+      core,
+      fromCore,
+      signatures,
+      blobsCore,
+      fromBlobsCore,
+      blobsSignatures,
+      { commit: false }
+    )
+
+    dryrunDbSignature = batch.signature
+    dryrunBlobsSignature = blobsBatch.signature
+    t.ok(dryrunDbSignature != null, 'db signature set when quorum met')
+    t.ok(dryrunBlobsSignature != null, 'blobs signature set when quorum met')
+  }
+
   const { batch, blobsBatch } = await signDrive(
     core,
     fromCore,
@@ -368,6 +388,8 @@ test('sign drive', async (t) => {
     await fromBlobsCore.treeHash(),
     'blobsCore treeHash is updated'
   )
+  t.is(batch.signature, dryrunDbSignature, 'db siganture matches dryrun')
+  t.is(blobsBatch.signature, dryrunBlobsSignature, 'blobs signature matches dryrun')
 })
 
 test('sign drive remotely', async (t) => {
