@@ -28,6 +28,14 @@ test('create core', async (t) => {
   t.is(core.writable, false, 'core is not writable')
 })
 
+test.solo('cannot create core with higher quorum than there are signers', async (t) => {
+  t.timeout(120000)
+
+  const { multisig, publicKeys, namespace } = await setupTest(t, undefined, { numSigners: 3 })
+  t.is(publicKeys.length, 3, 'sanity check')
+  await t.exception(async () =>  multisig.createCore(publicKeys, namespace, {quorum: 4 }), 'Should fail when creating multisig core with higher quorum than there are signers')
+})
+
 test('create drive', async (t) => {
   t.timeout(120000)
 
