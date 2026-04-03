@@ -360,7 +360,7 @@ test('sign drive', async (t) => {
       'db signature set when quorum met'
     )
     t.ok(
-      dryrunBlobsSignature !== null && dryrunDbSignature !== undefined,
+      dryrunBlobsSignature !== null && dryrunBlobsSignature !== undefined,
       'blobs signature set when quorum met'
     )
   }
