@@ -394,7 +394,7 @@ test('sign drive', async (t) => {
     await fromBlobsCore.treeHash(),
     'blobsCore treeHash is updated'
   )
-  t.is(batch.signature, dryrunDbSignature, 'db siganture matches dryrun')
+  t.is(batch.signature, dryrunDbSignature, 'db signature matches dryrun')
   t.is(blobsBatch.signature, dryrunBlobsSignature, 'blobs signature matches dryrun')
 })
 
