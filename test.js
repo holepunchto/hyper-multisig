@@ -65,12 +65,19 @@ test('sign core (dry-run)', async (t) => {
   const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
   const batch = await signCore(core, fromCore, signatures)
+  const dryRunSignature = batch.signature
 
   t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
   t.is(batch.length, fromCore.length, 'batch length is correct')
   t.is(batch.treeHash, idEnc.normalize(await fromCore.treeHash()), 'batch treeHash is correct')
   t.is(core.length, beforeSigning.length, 'core length is not changed')
   t.alike(await core.treeHash(), beforeSigning.treeHash, 'core treeHash is not changed')
+  t.is(dryRunSignature !== null, true, 'dryrun includes signature if quorum met')
+  t.is(core.length, 0, 'did not commit')
+
+  const commitBatch = await signCore(core, fromCore, signatures, { commit: true })
+  t.is(core.length, 3, 'did commit')
+  t.is(commitBatch.signature, dryRunSignature, 'sanity check: same signature with commit')
 })
 
 test('sign core', async (t) => {
@@ -332,6 +339,32 @@ test('sign drive', async (t) => {
 
   const fromCore = fromDrive.core
   const fromBlobsCore = fromDrive.blobs.core
+
+  let dryrunDbSignature = null
+  let dryrunBlobsSignature = null
+  {
+    const { batch, blobsBatch } = await signDrive(
+      core,
+      fromCore,
+      signatures,
+      blobsCore,
+      fromBlobsCore,
+      blobsSignatures,
+      { commit: false }
+    )
+
+    dryrunDbSignature = batch.signature
+    dryrunBlobsSignature = blobsBatch.signature
+    t.ok(
+      dryrunDbSignature !== null && dryrunDbSignature !== undefined,
+      'db signature set when quorum met'
+    )
+    t.ok(
+      dryrunBlobsSignature !== null && dryrunBlobsSignature !== undefined,
+      'blobs signature set when quorum met'
+    )
+  }
+
   const { batch, blobsBatch } = await signDrive(
     core,
     fromCore,
@@ -361,6 +394,8 @@ test('sign drive', async (t) => {
     await fromBlobsCore.treeHash(),
     'blobsCore treeHash is updated'
   )
+  t.is(batch.signature, dryrunDbSignature, 'db signature matches dryrun')
+  t.is(blobsBatch.signature, dryrunBlobsSignature, 'blobs signature matches dryrun')
 })
 
 test('sign drive remotely', async (t) => {
