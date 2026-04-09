@@ -27,7 +27,7 @@ const Hyperdrive = require('hyperdrive')
 const z32 = require('z32')
 
 const { getCoreKey, getManifest, getCoreInfo } = require('./lib/core')
-const { signCore, signDrive } = require('./lib/sign')
+const { signCore, signDrive, signTruncatedCore } = require('./lib/sign')
 const {
   verifyCoreRequestable,
   verifyCoreCommittable,
@@ -287,6 +287,51 @@ class HyperMultisig {
         }
       }
       return { manifest, core, blobsCore, quorum: obtainedQuorum, result }
+    })
+  }
+
+  requestTruncateCore(core, length, fork, { legacy = false } = {}) {
+    return new HyperMultisigRunner(async (runner) => {
+      const request = await SignRequest.generate(core, { length, fork, legacy })
+      return { request }
+    })
+  }
+
+  commitTruncateCore(core, request, responses, { dryRun } = {}) {
+    return new HyperMultisigRunner(async (runner) => {
+      const manifest = core.manifest
+
+      const { length } = SignRequest.decode(z32.decode(request))
+
+      const signResponses = []
+      for (const response of responses) {
+        const res = SignRequest.decodeResponse(z32.decode(response))
+        await CoreSign.verify(z32.decode(response), z32.decode(request), res.publicKey)
+        const publicKeyHex = res.publicKey.toString('hex')
+        signResponses[publicKeyHex] = res
+      }
+      const obtainedQuorum = Object.keys(signResponses).length
+      if (!dryRun && obtainedQuorum < manifest.quorum) {
+        throw new Error(`Insufficient quorum: ${obtainedQuorum} / ${manifest.quorum}`)
+      }
+
+      // NOTE: the ordering is important here, must map to signers ordering
+      const signatures = manifest.signers.map((signer) => {
+        const publicKeyHex = signer.publicKey.toString('hex')
+        return signResponses[publicKeyHex]?.signatures[0]
+      })
+
+      runner.emit('commit-start')
+      const batch = await signTruncatedCore(core, signatures, length, {
+        commit: !dryRun
+      })
+
+      const result = {
+        destCore: core,
+        batch
+      }
+
+      return { manifest, core, quorum: obtainedQuorum, result }
     })
   }
 }

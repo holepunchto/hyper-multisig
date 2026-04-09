@@ -1276,6 +1276,47 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   }
 })
 
+test.solo('request truncate core', async (t) => {
+  const { store, multisig, publicKeys, namespace, signers } = await setupTest(t)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  // First commit
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const { result } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
+    .done()
+  t.is(result.destCore.length, 3, 'first commit length is correct')
+
+  // Second commit
+  const { core } = await multisig.createCore(publicKeys, namespace)
+  const truncatedFork = 1
+  const truncatedLength = 2
+  /** @type {import('hypercore')} */
+  const { request: request2 } = await multisig
+    .requestTruncateCore(core, truncatedLength, truncatedFork)
+    .done()
+  const req2 = SignRequest.decode(request2)
+  t.is(req2.fork, truncatedFork, 'request encodes the correct fork number')
+  t.is(req2.length, truncatedLength, 'request length is correct after truncation')
+
+  const reqStr2 = z32.encode(request2)
+  const responses2 = signers
+    .slice(0, core.manifest.quorum)
+    .map((signer) => signResponse(request2, signer))
+  const { result: result2 } = await multisig.commitTruncateCore(core, reqStr2, responses2).done()
+  t.is(result2.destCore.fork, truncatedFork, 'result has the correct fork number')
+  t.is(result2.destCore.length, truncatedLength, 'second commit length is correct after fork')
+})
+
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
 async function requestAndSign(signers, fromCore, manifest, { length, isDrive } = {}) {
   const request = isDrive
