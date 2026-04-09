@@ -1276,6 +1276,58 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   }
 })
 
+test.solo('request core with fork after truncation', async (t) => {
+  t.timeout(120000)
+
+  const { store, multisig, publicKeys, namespace, signers } = await setupTest(t)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  // First commit
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const { result } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
+    .done()
+  t.is(result.destCore.length, 3, 'first commit length is correct')
+
+  // Truncate srcCore — this increments the fork counter
+  await srcCore.truncate(1)
+  t.is(srcCore.fork, 1, 'fork incremented after truncation')
+  t.is(srcCore.length, 1, 'core truncated')
+
+  // Append new data after truncation
+  await srcCore.append(b4a.from('new1'))
+  await srcCore.append(b4a.from('new2'))
+
+  const { manifest: manifest2, request: request2 } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, {
+      force: true,
+      fork: srcCore.fork
+    })
+    .done()
+  const req2 = SignRequest.decode(request2)
+  t.is(req2.fork, srcCore.fork, 'request encodes the correct fork number')
+  t.is(req2.length, srcCore.length, 'request length is correct after truncation')
+
+  // Commit the forked request
+  const reqStr2 = z32.encode(request2)
+  const responses2 = signers
+    .slice(0, manifest2.quorum)
+    .map((signer) => signResponse(request2, signer))
+  const { result: result2 } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr2, responses2, { force: true })
+    .done()
+  t.is(result2.destCore.length, srcCore.length, 'second commit length is correct after fork')
+})
+
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
 async function requestAndSign(signers, fromCore, manifest, { length, isDrive } = {}) {
   const request = isDrive

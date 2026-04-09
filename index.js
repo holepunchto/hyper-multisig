@@ -79,7 +79,7 @@ class HyperMultisig {
     namespace,
     srcCore,
     length,
-    { force = false, quorum, peerUpdateTimeout, legacy = false } = {}
+    { force = false, fork, quorum, peerUpdateTimeout } = {}
   ) {
     return new HyperMultisigRunner(async (runner) => {
       await srcCore.ready()
@@ -88,7 +88,7 @@ class HyperMultisig {
       if (!force) await verifyCoreRequestable(srcCore, length, { peerUpdateTimeout })
 
       const manifest = getManifest(publicKeys, namespace, { quorum })
-      const request = await SignRequest.generate(srcCore, { manifest, length, legacy })
+      const request = await SignRequest.generate(srcCore, { manifest, length, fork })
       return { manifest, request }
     })
   }
@@ -98,7 +98,7 @@ class HyperMultisig {
     namespace,
     srcDrive,
     length,
-    { force = false, quorum, peerUpdateTimeout, legacy = false } = {}
+    { force = false, fork, quorum, peerUpdateTimeout } = {}
   ) {
     return new HyperMultisigRunner(async (runner) => {
       await srcDrive.ready()
@@ -126,7 +126,7 @@ class HyperMultisig {
 
       runner.emit('creating-drive')
       const manifest = getManifest(publicKeys, namespace, { quorum })
-      const request = await SignRequest.generateDrive(srcDrive, { manifest, length, legacy })
+      const request = await SignRequest.generateDrive(srcDrive, { manifest, length, fork })
       return { manifest, request }
     })
   }
