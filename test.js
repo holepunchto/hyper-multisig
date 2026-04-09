@@ -1276,7 +1276,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   }
 })
 
-test.solo('request truncate core', async (t) => {
+test('request truncate core', async (t) => {
   const { store, multisig, publicKeys, namespace, signers } = await setupTest(t)
 
   const srcCore = store.get({ name: 'srcCore' })
