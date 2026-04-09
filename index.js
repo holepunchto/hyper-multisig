@@ -27,7 +27,7 @@ const Hyperdrive = require('hyperdrive')
 const z32 = require('z32')
 
 const { getCoreKey, getManifest, getCoreInfo } = require('./lib/core')
-const { signCore, signDrive, signTruncatedCore } = require('./lib/sign')
+const { signCore, signDrive, signTruncateCore } = require('./lib/sign')
 const {
   verifyCoreRequestable,
   verifyCoreCommittable,
@@ -322,7 +322,7 @@ class HyperMultisig {
       })
 
       runner.emit('commit-start')
-      const batch = await signTruncatedCore(core, signatures, length, {
+      const batch = await signTruncateCore(core, signatures, length, {
         commit: !dryRun
       })
 
