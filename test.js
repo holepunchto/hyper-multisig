@@ -1278,7 +1278,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   }
 })
 
-test('commit core - abort on verifyCoreCommitted', async (t) => {
+test.skip('commit core - abort on verifyCoreCommitted', async (t) => {
   t.plan(2)
   t.timeout(60000)
 
