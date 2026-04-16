@@ -193,7 +193,7 @@ class HyperMultisig {
         const aborter = new HyperMultisigAbort(async (aborter) => {
           await verifyCoreCommitted(core, { minPeers: minFullCopies, aborter })
         })
-        aborter.on('abort', () => runner.emit('abort'))
+        aborter.on('abort', () => runner.emit('verify-committed-abort'))
         await aborter.done()
       }
 
@@ -279,7 +279,7 @@ class HyperMultisig {
           await verifyCoreCommitted(core, { aborter })
           await verifyCoreCommitted(blobsCore, { aborter })
         })
-        aborter.on('abort', () => runner.emit('abort'))
+        aborter.on('abort', () => runner.emit('verify-committed-abort'))
         await aborter.done()
       }
 
