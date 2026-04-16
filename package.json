@@ -25,6 +25,7 @@
     "z32": "^1.1.0"
   },
   "devDependencies": {
+    "bare-process": "^4.4.1",
     "brittle": "^3.19.1",
     "corestore": "^7.8.0",
     "hyperdht": "^6.29.0",
@@ -48,6 +49,10 @@
     "events": {
       "bare": "bare-events",
       "default": "events"
+    },
+    "process": {
+      "bare": "bare-process",
+      "default": "process"
     }
   }
 }

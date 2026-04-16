@@ -9,12 +9,14 @@ const SignRequest = require('hypercore-signing-request')
 const createTestnet = require('hyperdht/testnet')
 const Hyperdrive = require('hyperdrive')
 const Hyperswarm = require('hyperswarm')
+const process = require('process')
 const sodium = require('sodium-native')
 const z32 = require('z32')
 
 const { getCoreKey } = require('./lib/core')
 const { signCore, signDrive } = require('./lib/sign')
 const { waitUntilSufficientPeers, waitUntilFullySeeded } = require('./lib/verify')
+const HyperMultisigAbort = require('./lib/abort')
 const Multisig = require('.')
 
 test('create core', async (t) => {
@@ -1274,6 +1276,35 @@ test('commit drive sanity checks throw correct errors', async (t) => {
       'corruption error'
     )
   }
+})
+
+test('HyperMultisigAbort', async (t) => {
+  t.plan(3)
+
+  let exitCode = null
+  const originalExit = process.exit
+  process.exit = (code) => {
+    exitCode = code
+  }
+  t.teardown(() => {
+    process.exit = originalExit
+  })
+
+  let abortEmitted = false
+  const aborter = new HyperMultisigAbort(async (aborter) => {
+    while (!aborter.aborted) await new Promise((resolve) => setTimeout(resolve, 10))
+  })
+  aborter.on('abort', () => {
+    abortEmitted = true
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  process.emit('SIGINT')
+  await aborter.done()
+
+  t.is(aborter.aborted, true, 'aborted flag is set')
+  t.is(abortEmitted, true, 'abort event was emitted')
+  t.is(exitCode, 130, 'exits with code 130 on SIGINT')
 })
 
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
