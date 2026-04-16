@@ -33,6 +33,7 @@ const {
   verifyCoreCommittable,
   verifyCoreCommitted
 } = require('./lib/verify')
+const HyperMultisigAbort = require('./lib/abort')
 
 class HyperMultisig {
   constructor(store, swarm) {
@@ -189,7 +190,11 @@ class HyperMultisig {
 
       if (!force && !dryRun) {
         runner.emit('verify-committed-start', core.key)
-        await verifyCoreCommitted(core, { minPeers: minFullCopies })
+        const aborter = new HyperMultisigAbort(async (aborter) => {
+          await verifyCoreCommitted(core, { minPeers: minFullCopies, aborter })
+        })
+        aborter.on('abort', () => runner.emit('abort'))
+        await aborter.done()
       }
 
       const result = {
@@ -270,8 +275,12 @@ class HyperMultisig {
 
       if (!force && !dryRun) {
         runner.emit('verify-committed-start', core.key)
-        await verifyCoreCommitted(core)
-        await verifyCoreCommitted(blobsCore)
+        const aborter = new HyperMultisigAbort(async (aborter) => {
+          await verifyCoreCommitted(core, { aborter })
+          await verifyCoreCommitted(blobsCore, { aborter })
+        })
+        aborter.on('abort', () => runner.emit('abort'))
+        await aborter.done()
       }
 
       const result = {
