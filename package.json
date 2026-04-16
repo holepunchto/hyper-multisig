@@ -16,6 +16,7 @@
   "dependencies": {
     "b4a": "^1.7.4",
     "bare-events": "^2.8.2",
+    "bare-process": "^4.4.1",
     "hypercore": "^11.24.0",
     "hypercore-crypto": "^3.6.1",
     "hypercore-id-encoding": "^1.3.0",
@@ -25,7 +26,6 @@
     "z32": "^1.1.0"
   },
   "devDependencies": {
-    "bare-process": "^4.4.1",
     "brittle": "^3.19.1",
     "corestore": "^7.8.0",
     "hyperdht": "^6.29.0",
