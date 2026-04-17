@@ -571,8 +571,10 @@ test('commit core', async (t) => {
     force: true
   })
 
-  const { result } = await commitCore.done()
+  const { core, result } = await commitCore.done()
 
+  t.is(idEnc.normalize(core.key), result.destCore.key)
+  t.is(core.key.toString('hex'), result.destCore.keyHex)
   t.is(result.destCore.length, srcCore.length, 'core length is correct')
 })
 
