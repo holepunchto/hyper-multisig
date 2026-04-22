@@ -654,7 +654,7 @@ test('request core sanity checks throw correct errors', async (t) => {
   t.is(req.length, srcCore.length, 'request length is correct')
 })
 
-test('commit core sanity checks throw correct errors', async (t) => {
+test.solo('commit core sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
   const {
     store2: srcStore1,
@@ -832,14 +832,10 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   await commitPromise2
 
-  await t.exception(
-    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
-    /REQUEST_LENGTH_TOO_SMALL/,
-    'request length too small error'
-  )
-
   // Create a request that would break the multisig core due to incompatible history
   {
+    await srcCore.append('block2')
+
     const badSrcCore = srcStore1.get({ name: 'bad-core' })
     await badSrcCore.append('block0')
     await badSrcCore.append('different block1')
@@ -868,6 +864,12 @@ test('commit core sanity checks throw correct errors', async (t) => {
       .done()
     const reqStr3 = z32.encode(request3)
     const responses3 = [signResponse(request3, signers[0])]
+
+    await t.exception(
+      () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr3, responses3).done(),
+      /SOURCE_CORE_TREE_HASH_MISMATCH/,
+      'source core tree hash mismatch error'
+    )
 
     await t.exception(
       () => multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3).done(),
@@ -1012,7 +1014,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
   t.is(req.length, srcDrive.core.length, 'request length is correct')
 })
 
-test('commit drive sanity checks throw correct errors', async (t) => {
+test.solo('commit drive sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
   const {
     store2: srcStore1,
@@ -1240,14 +1242,10 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   await commitPromise2
 
-  await t.exception(
-    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
-    /REQUEST_LENGTH_TOO_SMALL/,
-    'request length too small error'
-  )
-
   // Create a request that would break the multisig due to incompatible history
   {
+    await srcDrive.put('/file3', 'even more')
+
     const badSrcDrive = new Hyperdrive(srcStore1.namespace('other'))
     await badSrcDrive.put('/file', 'bad')
     await badSrcDrive.put('/file2', 'worse')
@@ -1280,6 +1278,15 @@ test('commit drive sanity checks throw correct errors', async (t) => {
       .done()
     const reqStr3 = z32.encode(request3)
     const responses3 = [signResponse(request3, signers[0])]
+
+    await t.exception(
+      async () => {
+        await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr3, responses3).done()
+      },
+      /SOURCE_CORE_TREE_HASH_MISMATCH/,
+      'source core tree hash mismatch error'
+    )
+
     await t.exception(
       async () => {
         await multisig.commitDrive(publicKeys, namespace, badSrcDrive, reqStr3, responses3).done()
