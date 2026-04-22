@@ -654,7 +654,7 @@ test('request core sanity checks throw correct errors', async (t) => {
   t.is(req.length, srcCore.length, 'request length is correct')
 })
 
-test('commit core sanity checks throw correct errors', async (t) => {
+test.solo('commit core sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
   const {
     store2: srcStore1,
@@ -832,6 +832,12 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   await commitPromise2
 
+  await t.exception(
+    () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
+    /REQUEST_LENGTH_TOO_SMALL/,
+    'request length too small error'
+  )
+
   // Create a request that would break the multisig core due to incompatible history
   {
     const badSrcCore = srcStore1.get({ name: 'bad-core' })
@@ -1006,7 +1012,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
   t.is(req.length, srcDrive.core.length, 'request length is correct')
 })
 
-test('commit drive sanity checks throw correct errors', async (t) => {
+test.solo('commit drive sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
   const {
     store2: srcStore1,
@@ -1233,6 +1239,12 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   }
 
   await commitPromise2
+
+  await t.exception(
+    () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
+    /REQUEST_LENGTH_TOO_SMALL/,
+    'request length too small error'
+  )
 
   // Create a request that would break the multisig due to incompatible history
   {
