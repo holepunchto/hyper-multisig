@@ -153,11 +153,11 @@ class HyperMultisig {
       const { manifest, core } = await this.createCore(publicKeys, namespace, { quorum })
       this.swarm.join(core.discoveryKey)
 
-      const { length } = SignRequest.decode(z32.decode(request))
+      const { length, treeHash } = SignRequest.decode(z32.decode(request))
 
       if (!force) {
         runner.emit('verify-committable-start', srcCore.key, core.key)
-        await verifyCoreCommittable(srcCore, core, length, {
+        await verifyCoreCommittable(srcCore, core, length, treeHash, {
           skipTargetChecks,
           peerUpdateTimeout
         })
@@ -220,17 +220,17 @@ class HyperMultisig {
       })
       this.swarm.join(core.discoveryKey)
 
-      const { length, content } = SignRequest.decode(z32.decode(request))
+      const { length, treeHash, content } = SignRequest.decode(z32.decode(request))
       const blobsLength = content.length
 
       if (!force) {
         runner.emit('verify-committable-start', srcDrive.db.core.key, core.key)
-        await verifyCoreCommittable(srcDrive.db.core, core, length, {
+        await verifyCoreCommittable(srcDrive.db.core, core, length, treeHash, {
           skipTargetChecks,
           peerUpdateTimeout,
           coreId: 'db'
         })
-        await verifyCoreCommittable(srcDrive.blobs.core, blobsCore, blobsLength, {
+        await verifyCoreCommittable(srcDrive.blobs.core, blobsCore, blobsLength, content.treeHash, {
           skipTargetChecks,
           peerUpdateTimeout,
           coreId: 'blobs'
