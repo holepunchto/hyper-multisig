@@ -834,6 +834,8 @@ test('commit core sanity checks throw correct errors', async (t) => {
 
   // Create a request that would break the multisig core due to incompatible history
   {
+    await srcCore.append('block2')
+
     const badSrcCore = srcStore1.get({ name: 'bad-core' })
     await badSrcCore.append('block0')
     await badSrcCore.append('different block1')
@@ -862,6 +864,12 @@ test('commit core sanity checks throw correct errors', async (t) => {
       .done()
     const reqStr3 = z32.encode(request3)
     const responses3 = [signResponse(request3, signers[0])]
+
+    await t.exception(
+      () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr3, responses3).done(),
+      /SRC_KEY_MISMATCH/,
+      'source key mismatch error'
+    )
 
     await t.exception(
       () => multisig.commitCore(publicKeys, namespace, badSrcCore, reqStr3, responses3).done(),
@@ -1236,6 +1244,8 @@ test('commit drive sanity checks throw correct errors', async (t) => {
 
   // Create a request that would break the multisig due to incompatible history
   {
+    await srcDrive.put('/file3', 'even more')
+
     const badSrcDrive = new Hyperdrive(srcStore1.namespace('other'))
     await badSrcDrive.put('/file', 'bad')
     await badSrcDrive.put('/file2', 'worse')
@@ -1268,6 +1278,15 @@ test('commit drive sanity checks throw correct errors', async (t) => {
       .done()
     const reqStr3 = z32.encode(request3)
     const responses3 = [signResponse(request3, signers[0])]
+
+    await t.exception(
+      async () => {
+        await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr3, responses3).done()
+      },
+      /SRC_KEY_MISMATCH/,
+      'source key mismatch error'
+    )
+
     await t.exception(
       async () => {
         await multisig.commitDrive(publicKeys, namespace, badSrcDrive, reqStr3, responses3).done()
