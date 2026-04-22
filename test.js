@@ -654,7 +654,7 @@ test('request core sanity checks throw correct errors', async (t) => {
   t.is(req.length, srcCore.length, 'request length is correct')
 })
 
-test.solo('commit core sanity checks throw correct errors', async (t) => {
+test('commit core sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
   const {
     store2: srcStore1,
@@ -1014,7 +1014,7 @@ test('request drive sanity checks throw correct errors', async (t) => {
   t.is(req.length, srcDrive.core.length, 'request length is correct')
 })
 
-test.solo('commit drive sanity checks throw correct errors', async (t) => {
+test('commit drive sanity checks throw correct errors', async (t) => {
   t.timeout(60000)
   const {
     store2: srcStore1,
