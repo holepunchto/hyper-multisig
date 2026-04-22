@@ -867,8 +867,8 @@ test.solo('commit core sanity checks throw correct errors', async (t) => {
 
     await t.exception(
       () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr3, responses3).done(),
-      /SOURCE_CORE_TREE_HASH_MISMATCH/,
-      'source core tree hash mismatch error'
+      /SRC_KEY_MISMATCH/,
+      'source key mismatch error'
     )
 
     await t.exception(
@@ -1283,8 +1283,8 @@ test.solo('commit drive sanity checks throw correct errors', async (t) => {
       async () => {
         await multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr3, responses3).done()
       },
-      /SOURCE_CORE_TREE_HASH_MISMATCH/,
-      'source core tree hash mismatch error'
+      /SRC_KEY_MISMATCH/,
+      'source key mismatch error'
     )
 
     await t.exception(
