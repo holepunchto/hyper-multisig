@@ -9,12 +9,14 @@ const SignRequest = require('hypercore-signing-request')
 const createTestnet = require('hyperdht/testnet')
 const Hyperdrive = require('hyperdrive')
 const Hyperswarm = require('hyperswarm')
+const process = require('process')
 const sodium = require('sodium-native')
 const z32 = require('z32')
 
 const { getCoreKey } = require('./lib/core')
 const { signCore, signDrive } = require('./lib/sign')
 const { waitUntilSufficientPeers, waitUntilFullySeeded } = require('./lib/verify')
+const HyperMultisigAbort = require('./lib/abort')
 const Multisig = require('.')
 
 test('create core', async (t) => {
@@ -1295,6 +1297,91 @@ test('commit drive sanity checks throw correct errors', async (t) => {
       'corruption error'
     )
   }
+})
+
+test.skip('commit core - abort on verifyCoreCommitted', async (t) => {
+  t.plan(2)
+  t.timeout(60000)
+
+  let exitCode = null
+  const originalExit = process.exit
+  process.exit = (code) => {
+    exitCode = code
+  }
+  t.teardown(() => {
+    process.exit = originalExit
+  })
+
+  const { store, swarm, store2, swarm2, store3, swarm3, multisig, publicKeys, namespace, signers } =
+    await setupTest(t, 3)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.append(b4a.from('block0'))
+  swarm.join(srcCore.discoveryKey)
+
+  const srcCore2 = store2.get(srcCore.key)
+  t.teardown(() => srcCore2.close())
+  await srcCore2.ready()
+  swarm2.join(srcCore2.discoveryKey)
+
+  const srcCore3 = store3.get(srcCore.key)
+  t.teardown(() => srcCore3.close())
+  await srcCore3.ready()
+  swarm3.join(srcCore3.discoveryKey)
+
+  await srcCore2.get(0)
+  await srcCore3.get(0)
+  await waitUntilFullySeeded(srcCore)
+
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+
+  let abortEmitted = false
+  const commitRunner = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+    skipTargetChecks: true
+  })
+  commitRunner.on('abort', () => {
+    abortEmitted = true
+  })
+  await new Promise((resolve) => commitRunner.once('verify-committed-start', resolve))
+  process.emit('SIGINT')
+  await commitRunner.done()
+
+  t.is(abortEmitted, true, 'abort event emitted on runner')
+  t.is(exitCode, 130, 'process exits with code 130')
+})
+
+test('HyperMultisigAbort', async (t) => {
+  t.plan(3)
+
+  let exitCode = null
+  const originalExit = process.exit
+  process.exit = (code) => {
+    exitCode = code
+  }
+  t.teardown(() => {
+    process.exit = originalExit
+  })
+
+  let abortEmitted = false
+  const aborter = new HyperMultisigAbort(async (aborter) => {
+    while (!aborter.aborted) await new Promise((resolve) => setTimeout(resolve, 10))
+  })
+  aborter.on('abort', () => {
+    abortEmitted = true
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  process.emit('SIGINT')
+  await aborter.done()
+
+  t.is(aborter.aborted, true, 'aborted flag is set')
+  t.is(abortEmitted, true, 'abort event was emitted')
+  t.is(exitCode, 130, 'exits with code 130 on SIGINT')
 })
 
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
