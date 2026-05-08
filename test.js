@@ -267,6 +267,9 @@ test('sign core multiple times w/ partial replication from previous sign', async
   await fromCore.append(b4a.from('0'))
   await fromCore.append(b4a.from('1'))
   await fromCore.append(b4a.from('2'))
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
 
   const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
@@ -299,6 +302,12 @@ test('sign core multiple times w/ partial replication from previous sign', async
     s1.pipe(s2).pipe(s1)
 
     await once(localCore, 'append')
+
+    // Sparsely populate localCore with blocks: 0, 1, 4
+    await localCore.get(0)
+    await localCore.get(1)
+
+    await localCore.get(4)
 
     t.is(localCore.length, core.length, 'same lengths')
     t.alike(localCore.key, core.key, 'same key')
