@@ -1358,10 +1358,10 @@ async function setupTest(t, n, { numSigners } = {}) {
   res.multisig = new Multisig(res.store, res.swarm)
   if (res.store2) res.multisig2 = new Multisig(res.store2, res.swarm2)
 
-  return { ...res, ...setupMultisig(undefined, numSigners) }
+  return { ...res, ...(await setupMultisig(undefined, numSigners)) }
 }
 
-function setupMultisig(namespace = 'holepunchto/my-test', numSigners = 3) {
+async function setupMultisig(namespace = 'holepunchto/my-test', numSigners = 3) {
   const signers = []
   for (let i = 0; i < numSigners; i++) {
     const seed = sodium.sodium_malloc(sodium.randombytes_SEEDBYTES)
@@ -1369,7 +1369,7 @@ function setupMultisig(namespace = 'holepunchto/my-test', numSigners = 3) {
     const password = sodium.sodium_malloc(8)
     sodium.randombytes_buf_deterministic(password, seed)
 
-    const keys = CoreSign.generateKeys(password)
+    const keys = await CoreSign.generateKeys(password)
     signers.push({ ...keys, seed })
   }
   const publicKeys = signers.map((signer) => idEnc.normalize(signer.publicKey))
