@@ -566,7 +566,9 @@ test('commit core', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     force: true
   })
@@ -595,7 +597,9 @@ test('commit core multiple times', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const { result } = await multisig
     .commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
       force: true
@@ -914,7 +918,9 @@ test('commit drive', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const { result } = await multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
@@ -939,7 +945,9 @@ test('commit drive multiple times', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const { result } = await multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
