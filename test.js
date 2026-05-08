@@ -1303,15 +1303,15 @@ async function requestAndSign(signers, fromCore, manifest, { length, isDrive } =
     ? await SignRequest.generateDrive(fromCore, { manifest, length })
     : await SignRequest.generate(fromCore, { manifest, length })
 
-  const allSignatures = signers
-    .slice(0, manifest.quorum)
-    .map((signer) => sign(request, signer).signatures)
-  const signatures = allSignatures.map((item) => item[0])
-  const blobsSignatures = allSignatures.map((item) => item[1])
+  const allSignatures = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => sign(request, signer))
+  )
+  const signatures = allSignatures.map((item) => item.signatures[0])
+  const blobsSignatures = allSignatures.map((item) => item.signatures[1])
   return { signatures, blobsSignatures }
 }
 
-function sign(request, signer) {
+async function sign(request, signer) {
   // clone to avoid mutation
   const clonedSigner = Object.keys(signer).reduce((acc, key) => {
     acc[key] = b4a.from(signer[key])
@@ -1323,13 +1323,13 @@ function sign(request, signer) {
   const password = sodium.sodium_malloc(8)
   sodium.randombytes_buf_deterministic(password, clonedSigner.seed)
 
-  const response = CoreSign.sign(request, clonedSigner.secretKey, password)
+  const response = await CoreSign.sign(request, clonedSigner.secretKey, password)
   const { signatures } = SignRequest.decodeResponse(response)
   return { clonedSigner, decodedReq, signatures }
 }
 
-function signResponse(request, signer) {
-  const { clonedSigner, decodedReq, signatures } = sign(request, signer)
+async function signResponse(request, signer) {
+  const { clonedSigner, decodedReq, signatures } = await sign(request, signer)
   const res = SignRequest.encodeResponse({
     version: decodedReq.version,
     requestHash: crypto.hash(request),
