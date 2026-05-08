@@ -877,6 +877,55 @@ test('commit core sanity checks throw correct errors', async (t) => {
       'corruption error'
     )
   }
+
+  await srcCore2.get(2)
+  await srcCore3.get(2)
+  await waitUntilFullySeeded(srcCore)
+
+  const { request: request4 } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr4 = z32.encode(request4)
+  const responses4 = [signResponse(request4, signers[0])]
+
+  const { result: result4 } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr4, responses4, { minFullCopies: 0 })
+    .done()
+  t.is(result4.destCore.length, 3, 'target core length is correct after request4 commit')
+
+  const { request: request5 } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr5 = z32.encode(request5)
+  const responses5 = [signResponse(request5, signers[0])]
+
+  await waitUntilSufficientPeers(tgtCore)
+  const tgtFullCopies = tgtCore.peers.filter(
+    (peer) => peer.remoteContiguousLength === tgtCore.length
+  ).length
+  t.ok(tgtFullCopies < 2, 'target core is not fully seeded after request4 commit')
+
+  await t.exception(
+    async () => {
+      await multisig
+        .commitCore(publicKeys, namespace, srcCore, reqStr5, responses5, {
+          minFullCopies: 0,
+          peerUpdateTimeout: -1
+        })
+        .done()
+    },
+    /TARGET_CORE_NOT_FULLY_SEEDED/,
+    'request5 fails when target is not fully seeded'
+  )
+
+  const { result: result5 } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr5, responses5, {
+      skipTargetWellSeeded: true,
+      minFullCopies: 0,
+      peerUpdateTimeout: -1
+    })
+    .done()
+  t.is(result5.destCore.length, 3, 'request5 commits with skipTargetWellSeeded')
 })
 
 test('request drive', async (t) => {
