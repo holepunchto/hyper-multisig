@@ -21,7 +21,7 @@
  */
 
 const { EventEmitter } = require('events')
-const CoreSign = require('hypercore-sign')
+const CoreSign = require('hypercore-sign-lib')
 const SignRequest = require('hypercore-signing-request')
 const Hyperdrive = require('hyperdrive')
 const z32 = require('z32')
