@@ -566,7 +566,7 @@ test('commit core', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
   const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     force: true
   })
@@ -595,7 +595,7 @@ test('commit core multiple times', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
   const { result } = await multisig
     .commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
       force: true
@@ -691,7 +691,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
     })
     .done()
   const reqStr = z32.encode(request)
-  const responses = [signResponse(request, signers[0])]
+  const responses = [await signResponse(request, signers[0])]
 
   await t.exception(
     () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
@@ -777,7 +777,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
     .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
     .done()
   const reqStr2 = z32.encode(request2)
-  const responses2 = [signResponse(request2, signers[0])]
+  const responses2 = [await signResponse(request2, signers[0])]
 
   await t.exception(
     () =>
@@ -863,7 +863,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
       .requestCore(publicKeys, namespace, badSrcCore, badSrcCore.length, { force: true })
       .done()
     const reqStr3 = z32.encode(request3)
-    const responses3 = [signResponse(request3, signers[0])]
+    const responses3 = [await signResponse(request3, signers[0])]
 
     await t.exception(
       () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr3, responses3).done(),
@@ -914,7 +914,7 @@ test('commit drive', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
   const { result } = await multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
@@ -939,7 +939,7 @@ test('commit drive multiple times', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer)))
   const { result } = await multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
@@ -1049,7 +1049,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
     .done()
   const reqStr = z32.encode(request)
-  const responses = [signResponse(request, signers[0])]
+  const responses = [await signResponse(request, signers[0])]
 
   await t.exception(
     () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
@@ -1162,7 +1162,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
     .done()
   const reqStr2 = z32.encode(request2)
-  const responses2 = [signResponse(request2, signers[0])]
+  const responses2 = [await signResponse(request2, signers[0])]
 
   await t.exception(
     () =>
@@ -1277,7 +1277,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
       .requestDrive(publicKeys, namespace, badSrcDrive, badSrcDrive.version, { force: true })
       .done()
     const reqStr3 = z32.encode(request3)
-    const responses3 = [signResponse(request3, signers[0])]
+    const responses3 = [await signResponse(request3, signers[0])]
 
     await t.exception(
       async () => {
