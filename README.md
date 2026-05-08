@@ -89,6 +89,7 @@ Options include:
   dryRun: false, // perform validation without committing
   force: false, // advanced option, and dangerous
   skipTargetChecks: false, // only useful for the first commit
+  skipTargetWellSeeded: false // only for re-committing
   peerUpdateTimeout: 5000, // timeout in ms for peer updates
   minFullCopies: 2 // minimum number of peers with a full copy of the core
 }

@@ -142,6 +142,7 @@ class HyperMultisig {
       dryRun,
       force = false,
       skipTargetChecks = false,
+      skipTargetWellSeeded = false,
       peerUpdateTimeout,
       minFullCopies = 2
     } = {}
@@ -159,6 +160,7 @@ class HyperMultisig {
         runner.emit('verify-committable-start', srcCore.key, core.key)
         await verifyCoreCommittable(srcCore, core, length, treeHash, {
           skipTargetChecks,
+          skipTargetWellSeeded,
           peerUpdateTimeout
         })
       }
@@ -208,7 +210,14 @@ class HyperMultisig {
     srcDrive,
     request,
     responses,
-    { quorum, dryRun, force = false, skipTargetChecks = false, peerUpdateTimeout } = {}
+    {
+      quorum,
+      dryRun,
+      force = false,
+      skipTargetChecks = false,
+      skipTargetWellSeeded = false,
+      peerUpdateTimeout
+    } = {}
   ) {
     return new HyperMultisigRunner(async (runner) => {
       await srcDrive.ready()
@@ -227,11 +236,13 @@ class HyperMultisig {
         runner.emit('verify-committable-start', srcDrive.db.core.key, core.key)
         await verifyCoreCommittable(srcDrive.db.core, core, length, treeHash, {
           skipTargetChecks,
+          skipTargetWellSeeded,
           peerUpdateTimeout,
           coreId: 'db'
         })
         await verifyCoreCommittable(srcDrive.blobs.core, blobsCore, blobsLength, content.treeHash, {
           skipTargetChecks,
+          skipTargetWellSeeded,
           peerUpdateTimeout,
           coreId: 'blobs'
         })
