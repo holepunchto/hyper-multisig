@@ -11,6 +11,7 @@ const Hyperdrive = require('hyperdrive')
 const Hyperswarm = require('hyperswarm')
 const sodium = require('sodium-native')
 const z32 = require('z32')
+const { once } = require('events')
 
 const { getCoreKey } = require('./lib/core')
 const { signCore, signDrive } = require('./lib/sign')
@@ -252,6 +253,76 @@ test('sign core multiple times', async (t) => {
     )
     t.is(core.length, fromCore.length, 'core length is updated [5]')
     t.alike(await core.treeHash(), await fromCore.treeHash(), 'core treeHash is updated [5]')
+  }
+})
+
+test('sign core multiple times w/ partial replication from previous sign', async (t) => {
+  t.timeout(120000)
+
+  const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
+  const { manifest, core } = await multisig.createCore(publicKeys, namespace)
+
+  const fromCore = store.get({ name: 'fromCore' })
+  t.teardown(() => fromCore.close())
+  await fromCore.append(b4a.from('0'))
+  await fromCore.append(b4a.from('1'))
+  await fromCore.append(b4a.from('2'))
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
+
+  const { signatures } = await requestAndSign(signers, fromCore, manifest)
+
+  {
+    const batch = await signCore(core, fromCore, signatures, { commit: true })
+    t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [1]')
+    t.is(batch.length, fromCore.length, 'batch length is correct [1]')
+    t.is(
+      batch.treeHash,
+      idEnc.normalize(await fromCore.treeHash()),
+      'batch treeHash is correct [1]'
+    )
+    t.is(core.length, fromCore.length, 'core length is updated [1]')
+    t.alike(await core.treeHash(), await fromCore.treeHash(), 'core treeHash is updated [1]')
+  }
+
+  {
+    // Create new storage to simulate separate peer
+    const store2 = new Corestore(await t.tmp())
+    t.teardown(() => store2.close(), { order: 4000 })
+
+    t.comment('second sign')
+    const localCore = store2.get({ manifest })
+    t.teardown(() => localCore.close())
+    t.is(localCore.length, 0, '2nd signer core is new')
+
+    t.comment('replicate state of sign core')
+    const s1 = store.replicate(true)
+    const s2 = store2.replicate(false)
+    s1.pipe(s2).pipe(s1)
+
+    await once(localCore, 'append')
+
+    // Sparsely populate localCore with blocks: 0, 1, 4
+    await localCore.get(0)
+    await localCore.get(1)
+
+    await localCore.get(4)
+
+    t.is(localCore.length, core.length, 'same lengths')
+    t.alike(localCore.key, core.key, 'same key')
+    t.absent(await localCore.has(0, core.length), '2nd signer core is missing blocks')
+
+    const batch = await signCore(localCore, fromCore, signatures, { commit: true })
+    t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [2]')
+    t.is(batch.length, fromCore.length, 'batch length is correct [2]')
+    t.is(
+      batch.treeHash,
+      idEnc.normalize(await fromCore.treeHash()),
+      'batch treeHash is correct [2]'
+    )
+
+    t.ok(await localCore.has(0, core.length), '2nd signer core has all blocks')
   }
 })
 
