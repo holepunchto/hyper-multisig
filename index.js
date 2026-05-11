@@ -216,7 +216,8 @@ class HyperMultisig {
       force = false,
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
-      peerUpdateTimeout
+      peerUpdateTimeout,
+      minFullCopies = 2
     } = {}
   ) {
     return new HyperMultisigRunner(async (runner) => {
@@ -281,8 +282,8 @@ class HyperMultisig {
 
       if (!force && !dryRun) {
         runner.emit('verify-committed-start', core.key)
-        await verifyCoreCommitted(core)
-        await verifyCoreCommitted(blobsCore)
+        await verifyCoreCommitted(core, { minPeers: minFullCopies })
+        await verifyCoreCommitted(blobsCore, { minPeers: minFullCopies })
       }
 
       const result = {

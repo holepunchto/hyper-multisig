@@ -886,7 +886,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
     .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
     .done()
   const reqStr4 = z32.encode(request4)
-  const responses4 = [signResponse(request4, signers[0])]
+  const responses4 = [await signResponse(request4, signers[0])]
 
   const { result: result4 } = await multisig
     .commitCore(publicKeys, namespace, srcCore, reqStr4, responses4, { minFullCopies: 0 })
@@ -897,7 +897,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
     .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
     .done()
   const reqStr5 = z32.encode(request5)
-  const responses5 = [signResponse(request5, signers[0])]
+  const responses5 = [await signResponse(request5, signers[0])]
 
   await waitUntilSufficientPeers(tgtCore)
   const tgtFullCopies = tgtCore.peers.filter(
@@ -1344,6 +1344,81 @@ test('commit drive sanity checks throw correct errors', async (t) => {
       'corruption error'
     )
   }
+
+  await srcCore2.checkout(srcDrive.version).get('/file3')
+  await srcCore3.checkout(srcDrive.version).get('/file3')
+  await waitUntilFullySeeded(srcDrive.db.core)
+  await waitUntilFullySeeded(srcDrive.blobs.core)
+
+  const { request: request4 } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
+  const reqStr4 = z32.encode(request4)
+  const responses4 = [await signResponse(request4, signers[0])]
+
+  const { result: result4 } = await multisig
+    .commitDrive(publicKeys, namespace, srcDrive, reqStr4, responses4, { minFullCopies: 0 })
+    .done()
+  t.is(
+    result4.db.destCore.length,
+    srcDrive.db.core.length,
+    'target db length is correct after request4 commit'
+  )
+  t.is(
+    result4.blobs.destCore.length,
+    srcDrive.blobs.core.length,
+    'target blobs length is correct after request4 commit'
+  )
+
+  const { request: request5 } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
+  const reqStr5 = z32.encode(request5)
+  const responses5 = [await signResponse(request5, signers[0])]
+
+  await waitUntilSufficientPeers(tgtCore)
+  await waitUntilSufficientPeers(tgtBlobsCore)
+
+  const tgtFullCopies = tgtCore.peers.filter(
+    (peer) => peer.remoteContiguousLength === tgtCore.length
+  ).length
+  const tgtBlobsFullCopies = tgtBlobsCore.peers.filter(
+    (peer) => peer.remoteContiguousLength === tgtBlobsCore.length
+  ).length
+
+  t.ok(tgtFullCopies < 2, 'target db core is not fully seeded after request4 commit')
+  t.ok(tgtBlobsFullCopies < 2, 'target blobs core is not fully seeded after request4 commit')
+
+  await t.exception(
+    async () => {
+      await multisig
+        .commitDrive(publicKeys, namespace, srcDrive, reqStr5, responses5, {
+          minFullCopies: 0,
+          peerUpdateTimeout: -1
+        })
+        .done()
+    },
+    /TARGET_CORE_NOT_FULLY_SEEDED: db/,
+    'request5 fails when target is not fully seeded'
+  )
+
+  const { result: result5 } = await multisig
+    .commitDrive(publicKeys, namespace, srcDrive, reqStr5, responses5, {
+      skipTargetWellSeeded: true,
+      minFullCopies: 0,
+      peerUpdateTimeout: -1
+    })
+    .done()
+  t.is(
+    result5.db.destCore.length,
+    srcDrive.db.core.length,
+    'request5 commits with skipTargetWellSeeded'
+  )
+  t.is(
+    result5.blobs.destCore.length,
+    srcDrive.blobs.core.length,
+    'request5 blobs commit with skipTargetWellSeeded'
+  )
 })
 
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
