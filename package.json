@@ -19,7 +19,7 @@
     "hypercore": "^11.24.0",
     "hypercore-crypto": "^3.6.1",
     "hypercore-id-encoding": "^1.3.0",
-    "hypercore-sign": "^4.0.1",
+    "hypercore-sign-lib": "^1.1.0",
     "hypercore-signing-request": "^5.1.1",
     "hyperdrive": "^13.2.1",
     "z32": "^1.1.0"

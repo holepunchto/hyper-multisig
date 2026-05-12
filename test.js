@@ -4,7 +4,7 @@ const Corestore = require('corestore')
 const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 const idEnc = require('hypercore-id-encoding')
-const CoreSign = require('hypercore-sign')
+const CoreSign = require('hypercore-sign-lib')
 const SignRequest = require('hypercore-signing-request')
 const createTestnet = require('hyperdht/testnet')
 const Hyperdrive = require('hyperdrive')
@@ -637,7 +637,9 @@ test('commit core', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     force: true
   })
@@ -666,7 +668,9 @@ test('commit core multiple times', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const { result } = await multisig
     .commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
       force: true
@@ -762,7 +766,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
     })
     .done()
   const reqStr = z32.encode(request)
-  const responses = [signResponse(request, signers[0])]
+  const responses = [await signResponse(request, signers[0])]
 
   await t.exception(
     () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses).done(),
@@ -848,7 +852,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
     .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
     .done()
   const reqStr2 = z32.encode(request2)
-  const responses2 = [signResponse(request2, signers[0])]
+  const responses2 = [await signResponse(request2, signers[0])]
 
   await t.exception(
     () =>
@@ -934,7 +938,7 @@ test('commit core sanity checks throw correct errors', async (t) => {
       .requestCore(publicKeys, namespace, badSrcCore, badSrcCore.length, { force: true })
       .done()
     const reqStr3 = z32.encode(request3)
-    const responses3 = [signResponse(request3, signers[0])]
+    const responses3 = [await signResponse(request3, signers[0])]
 
     await t.exception(
       () => multisig.commitCore(publicKeys, namespace, srcCore, reqStr3, responses3).done(),
@@ -985,7 +989,9 @@ test('commit drive', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const { result } = await multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
@@ -1010,7 +1016,9 @@ test('commit drive multiple times', async (t) => {
     .done()
   const reqStr = z32.encode(request)
 
-  const responses = signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
   const { result } = await multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
@@ -1120,7 +1128,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
     .done()
   const reqStr = z32.encode(request)
-  const responses = [signResponse(request, signers[0])]
+  const responses = [await signResponse(request, signers[0])]
 
   await t.exception(
     () => multisig.commitDrive(publicKeys, namespace, srcDrive, reqStr, responses).done(),
@@ -1233,7 +1241,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
     .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
     .done()
   const reqStr2 = z32.encode(request2)
-  const responses2 = [signResponse(request2, signers[0])]
+  const responses2 = [await signResponse(request2, signers[0])]
 
   await t.exception(
     () =>
@@ -1348,7 +1356,7 @@ test('commit drive sanity checks throw correct errors', async (t) => {
       .requestDrive(publicKeys, namespace, badSrcDrive, badSrcDrive.version, { force: true })
       .done()
     const reqStr3 = z32.encode(request3)
-    const responses3 = [signResponse(request3, signers[0])]
+    const responses3 = [await signResponse(request3, signers[0])]
 
     await t.exception(
       async () => {
@@ -1374,15 +1382,15 @@ async function requestAndSign(signers, fromCore, manifest, { length, isDrive } =
     ? await SignRequest.generateDrive(fromCore, { manifest, length })
     : await SignRequest.generate(fromCore, { manifest, length })
 
-  const allSignatures = signers
-    .slice(0, manifest.quorum)
-    .map((signer) => sign(request, signer).signatures)
-  const signatures = allSignatures.map((item) => item[0])
-  const blobsSignatures = allSignatures.map((item) => item[1])
+  const allSignatures = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => sign(request, signer))
+  )
+  const signatures = allSignatures.map((item) => item.signatures[0])
+  const blobsSignatures = allSignatures.map((item) => item.signatures[1])
   return { signatures, blobsSignatures }
 }
 
-function sign(request, signer) {
+async function sign(request, signer) {
   // clone to avoid mutation
   const clonedSigner = Object.keys(signer).reduce((acc, key) => {
     acc[key] = b4a.from(signer[key])
@@ -1394,13 +1402,13 @@ function sign(request, signer) {
   const password = sodium.sodium_malloc(8)
   sodium.randombytes_buf_deterministic(password, clonedSigner.seed)
 
-  const response = CoreSign.sign(request, clonedSigner.secretKey, password)
+  const response = await CoreSign.sign(request, clonedSigner.secretKey, password)
   const { signatures } = SignRequest.decodeResponse(response)
   return { clonedSigner, decodedReq, signatures }
 }
 
-function signResponse(request, signer) {
-  const { clonedSigner, decodedReq, signatures } = sign(request, signer)
+async function signResponse(request, signer) {
+  const { clonedSigner, decodedReq, signatures } = await sign(request, signer)
   const res = SignRequest.encodeResponse({
     version: decodedReq.version,
     requestHash: crypto.hash(request),
@@ -1429,10 +1437,10 @@ async function setupTest(t, n, { numSigners } = {}) {
   res.multisig = new Multisig(res.store, res.swarm)
   if (res.store2) res.multisig2 = new Multisig(res.store2, res.swarm2)
 
-  return { ...res, ...setupMultisig(undefined, numSigners) }
+  return { ...res, ...(await setupMultisig(undefined, numSigners)) }
 }
 
-function setupMultisig(namespace = 'holepunchto/my-test', numSigners = 3) {
+async function setupMultisig(namespace = 'holepunchto/my-test', numSigners = 3) {
   const signers = []
   for (let i = 0; i < numSigners; i++) {
     const seed = sodium.sodium_malloc(sodium.randombytes_SEEDBYTES)
@@ -1440,7 +1448,7 @@ function setupMultisig(namespace = 'holepunchto/my-test', numSigners = 3) {
     const password = sodium.sodium_malloc(8)
     sodium.randombytes_buf_deterministic(password, seed)
 
-    const keys = CoreSign.generateKeys(password)
+    const keys = await CoreSign.generateKeys(password)
     signers.push({ ...keys, seed })
   }
   const publicKeys = signers.map((signer) => idEnc.normalize(signer.publicKey))
