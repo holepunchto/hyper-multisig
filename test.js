@@ -326,6 +326,98 @@ test('sign core multiple times w/ partial replication from previous sign', async
   }
 })
 
+test('sign core rejects different second batch w/ partial replication from previous sign', async (t) => {
+  t.timeout(120000)
+
+  const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
+  const { manifest, core } = await multisig.createCore(publicKeys, namespace)
+
+  const fromCore = store.get({ name: 'fromCore' })
+  t.teardown(() => fromCore.close())
+  await fromCore.append(b4a.from('0'))
+  await fromCore.append(b4a.from('1'))
+  await fromCore.append(b4a.from('2'))
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
+
+  const { signatures } = await requestAndSign(signers, fromCore, manifest)
+
+  await signCore(core, fromCore, signatures, { commit: true })
+
+  // Create new storage to simulate separate peer
+  const store2 = new Corestore(await t.tmp())
+  t.teardown(() => store2.close(), { order: 4000 })
+
+  const localCore = store2.get({ manifest })
+  t.teardown(() => localCore.close())
+  t.is(localCore.length, 0, '2nd signer core is new')
+
+  const s1 = store.replicate(true)
+  const s2 = store2.replicate(false)
+  s1.pipe(s2).pipe(s1)
+
+  await once(localCore, 'append')
+
+  // Sparsely populate localCore with blocks: 0, 1, 4
+  await localCore.get(0)
+  await localCore.get(1)
+  await localCore.get(4)
+
+  t.is(localCore.length, core.length, 'same lengths')
+  t.alike(localCore.key, core.key, 'same key')
+  t.absent(await localCore.has(0, core.length), '2nd signer core is missing blocks')
+
+  await fromCore.append(b4a.from('6'))
+  await fromCore.append(b4a.from('7'))
+  await fromCore.append(b4a.from('8'))
+
+  const { signatures: signatures2 } = await requestAndSign(signers, fromCore, manifest)
+
+  const differentFromCore = store.get({ name: 'differentFromCore' })
+  t.teardown(() => differentFromCore.close())
+  await differentFromCore.append(b4a.from('0'))
+  await differentFromCore.append(b4a.from('1'))
+  await differentFromCore.append(b4a.from('2'))
+  await differentFromCore.append(b4a.from('3'))
+  await differentFromCore.append(b4a.from('4'))
+  await differentFromCore.append(b4a.from('5'))
+  await differentFromCore.append(b4a.from('different-6'))
+  await differentFromCore.append(b4a.from('different-7'))
+  await differentFromCore.append(b4a.from('different-8'))
+
+  t.is(differentFromCore.length, fromCore.length, 'different batch length matches')
+  t.alike(
+    await differentFromCore.treeHash(core.length),
+    await fromCore.treeHash(core.length),
+    'different batch shares previous signed state'
+  )
+  t.unlike(await differentFromCore.treeHash(), await fromCore.treeHash(), 'second batch differs')
+
+  await t.exception(
+    async () => {
+      await signCore(localCore, differentFromCore, signatures2, { commit: true })
+    },
+    { code: 'INVALID_SIGNATURE' },
+    'rejects different second batch with invalid signature'
+  )
+
+  t.absent(
+    await localCore.has(0, fromCore.length),
+    '2nd signer core is still missing blocks after invalid commit'
+  )
+
+  const batch = await signCore(localCore, fromCore, signatures2, { commit: true })
+  t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct after invalid commit')
+  t.is(batch.length, fromCore.length, 'batch length is correct after invalid commit')
+  t.is(
+    batch.treeHash,
+    idEnc.normalize(await fromCore.treeHash()),
+    'batch treeHash is correct after invalid commit'
+  )
+  t.ok(await localCore.has(0, fromCore.length), '2nd signer core has all blocks')
+})
+
 test('sign core remotely', async (t) => {
   t.timeout(120000)
   const { store, swarm, store2, swarm2, multisig, multisig2, signers, publicKeys, namespace } =
