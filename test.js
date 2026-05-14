@@ -740,6 +740,66 @@ test('commit core', async (t) => {
   t.is(result.destCore.length, srcCore.length, 'core length is correct')
 })
 
+test('commit core with swarmAsServer false', async (t) => {
+  t.timeout(120000)
+
+  const { store, swarm, store2, swarm2, store3, swarm3, multisig, publicKeys, namespace, signers } =
+    await setupTest(t, 3)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
+
+  const targetCore2 = store2.get({ manifest })
+  const targetCore3 = store3.get({ manifest })
+  t.teardown(() => targetCore2.close())
+  t.teardown(() => targetCore3.close())
+  await Promise.all([targetCore2.ready(), targetCore3.ready()])
+
+  const { core, result } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+      force: true,
+      swarmAsServer: false
+    })
+    .done()
+  t.is(idEnc.normalize(core.key), result.destCore.key)
+  t.is(result.destCore.length, srcCore.length, 'core length is correct')
+
+  const peer2Session = swarm2.join(targetCore2.discoveryKey, { client: true, server: false })
+  const peer2Download = targetCore2.download({ start: 0, end: srcCore.length }).done()
+  await Promise.all([swarm.flush(), swarm2.flush()])
+
+  const peer2DownloadedFromMain = await Promise.race([
+    peer2Download.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 1000))
+  ])
+  t.absent(peer2DownloadedFromMain, 'peer 2 cannot download from client-only main')
+  t.absent(await targetCore2.has(0, srcCore.length), 'peer 2 has no blocks from main')
+
+  swarm3.join(targetCore3.discoveryKey, { client: true, server: true })
+  await swarm3.flush()
+
+  await Promise.all([swarm.status(core.discoveryKey).refresh(), peer2Session.refresh()])
+  await Promise.all([swarm.flush(), swarm2.flush(), swarm3.flush()])
+  await targetCore3.download({ start: 0, end: srcCore.length }).done()
+  t.alike(await targetCore3.treeHash(), await srcCore.treeHash(), 'peer 3 received committed core')
+
+  await peer2Download
+  t.alike(await targetCore2.treeHash(), await srcCore.treeHash(), 'peer 2 received committed core')
+  t.ok(await targetCore2.has(0, srcCore.length), 'peer 2 downloaded blocks from peer 3')
+})
+
 test('commit core multiple times', async (t) => {
   t.timeout(120000)
 
