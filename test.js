@@ -381,8 +381,11 @@ test('sign core rejects different batch recommit w/ partial replication from pre
   t.is(differentFromCore.length, fromCore.length, 'different batch length matches')
   t.unlike(await differentFromCore.treeHash(), await fromCore.treeHash(), 'second batch differs')
 
-  // invalid commit, no error thrown but should not update the core
-  await signCore(localCore, differentFromCore, signatures, { commit: true })
+  await t.exception(
+    () => signCore(localCore, differentFromCore, signatures, { commit: true }),
+    /COMMIT_FAILED/,
+    'invalid commit throws commit failed'
+  )
 
   t.is(localCore.length, core.length, 'length not updated after invalid commit')
   t.alike(localCore.key, core.key, 'same key after invalid commit')
