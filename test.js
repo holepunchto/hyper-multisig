@@ -326,7 +326,7 @@ test('sign core multiple times w/ partial replication from previous sign', async
   }
 })
 
-test('sign core rejects different batch recommit w/ partial replication from previous sign', async (t) => {
+test.solo('sign core rejects different batch recommit w/ partial replication from previous sign', async (t) => {
   t.timeout(120000)
 
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
@@ -355,6 +355,10 @@ test('sign core rejects different batch recommit w/ partial replication from pre
 
   const s1 = store.replicate(true)
   const s2 = store2.replicate(false)
+  t.teardown(() => {
+    s1.destroy()
+    s2.destroy()
+  })
   s1.pipe(s2).pipe(s1)
 
   await once(localCore, 'append')
@@ -366,6 +370,11 @@ test('sign core rejects different batch recommit w/ partial replication from pre
 
   t.is(localCore.length, core.length, 'same lengths')
   t.alike(localCore.key, core.key, 'same key')
+
+  // Stop replication
+  s1.destroy()
+  s2.destroy()
+
   t.alike(await localCore.treeHash(), await core.treeHash(), 'same treeHash')
   t.absent(await localCore.has(0, core.length), '2nd signer core is missing blocks')
 
