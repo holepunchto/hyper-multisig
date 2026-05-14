@@ -375,7 +375,7 @@ test.solo('sign core rejects different batch recommit w/ partial replication fro
   s1.destroy()
   s2.destroy()
 
-  t.alike(await localCore.treeHash(), await core.treeHash(), 'same treeHash')
+  t.alike(await Hypercore.treeHashFromStorage(localCore), await core.treeHash(), 'same treeHash')
   t.absent(await localCore.has(0, core.length), '2nd signer core is missing blocks')
 
   const differentFromCore = store.get({ name: 'differentFromCore' })
@@ -399,7 +399,7 @@ test.solo('sign core rejects different batch recommit w/ partial replication fro
   t.is(localCore.length, core.length, 'length not updated after invalid commit')
   t.alike(localCore.key, core.key, 'same key after invalid commit')
   t.alike(
-    await localCore.treeHash(),
+    await Hypercore.treeHashFromStorage(localCore),
     await core.treeHash(),
     '2nd signer core treeHash is not updated after invalid commit'
   )
