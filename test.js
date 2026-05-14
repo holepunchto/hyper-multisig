@@ -326,7 +326,7 @@ test('sign core multiple times w/ partial replication from previous sign', async
   }
 })
 
-test.solo('sign core rejects different batch recommit w/ partial replication from previous sign', async (t) => {
+test('sign core rejects different batch recommit w/ partial replication from previous sign', async (t) => {
   t.timeout(120000)
 
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
