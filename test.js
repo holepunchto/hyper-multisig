@@ -115,6 +115,9 @@ test('sign core with request length less than source length', async (t) => {
   await fromCore.append(b4a.from('0'))
   await fromCore.append(b4a.from('1'))
   await fromCore.append(b4a.from('2'))
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
 
   const requestLength = fromCore.length - 2
   const { signatures } = await requestAndSign(signers, fromCore, manifest, {
