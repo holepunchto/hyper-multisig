@@ -119,7 +119,7 @@ test('sign core with request length less than source length', async (t) => {
   await fromCore.append(b4a.from('4'))
   await fromCore.append(b4a.from('5'))
 
-  const requestLength = fromCore.length - 2
+  const requestLength = 4
   const { signatures } = await requestAndSign(signers, fromCore, manifest, {
     length: requestLength
   })
@@ -133,7 +133,7 @@ test('sign core with request length less than source length', async (t) => {
   await fromCore.append(b4a.from('8'))
   await fromCore.append(b4a.from('9'))
 
-  t.ok(requestLength < fromCore.length, 'request length is less than source length')
+  t.is(requestLength, 4, 'request length is less than source length')
   t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
   t.is(batch.length, requestLength, 'batch length is correct')
   t.is(
