@@ -104,7 +104,7 @@ test('sign core', async (t) => {
   t.alike(await core.treeHash(), await fromCore.treeHash(), 'core treeHash is updated')
 })
 
-test.solo('sign core with request length less than source length', async (t) => {
+test('sign core with request length less than source length', async (t) => {
   t.timeout(120000)
 
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
