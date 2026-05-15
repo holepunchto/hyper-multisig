@@ -140,6 +140,7 @@ class HyperMultisig {
     {
       quorum,
       dryRun,
+      swarmAsServer = true,
       force = false,
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
@@ -152,7 +153,7 @@ class HyperMultisig {
       this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
 
       const { manifest, core } = await this.createCore(publicKeys, namespace, { quorum })
-      this.swarm.join(core.discoveryKey)
+      this.swarm.join(core.discoveryKey, { client: true, server: swarmAsServer })
 
       const { length, treeHash } = SignRequest.decode(z32.decode(request))
 
@@ -213,6 +214,7 @@ class HyperMultisig {
     {
       quorum,
       dryRun,
+      swarmAsServer = true,
       force = false,
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
@@ -228,7 +230,7 @@ class HyperMultisig {
       const { manifest, core, blobsCore } = await this.createDrive(publicKeys, namespace, {
         quorum
       })
-      this.swarm.join(core.discoveryKey)
+      this.swarm.join(core.discoveryKey, { client: true, server: swarmAsServer })
 
       const { length, treeHash, content } = SignRequest.decode(z32.decode(request))
       const blobsLength = content.length

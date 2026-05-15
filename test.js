@@ -326,6 +326,95 @@ test('sign core multiple times w/ partial replication from previous sign', async
   }
 })
 
+test('sign core rejects different batch recommit w/ partial replication from previous sign', async (t) => {
+  t.timeout(120000)
+
+  const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
+  const { manifest, core } = await multisig.createCore(publicKeys, namespace)
+
+  const fromCore = store.get({ name: 'fromCore' })
+  t.teardown(() => fromCore.close())
+  await fromCore.append(b4a.from('0'))
+  await fromCore.append(b4a.from('1'))
+  await fromCore.append(b4a.from('2'))
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
+
+  const { signatures } = await requestAndSign(signers, fromCore, manifest)
+
+  await signCore(core, fromCore, signatures, { commit: true })
+
+  // Create new storage to simulate separate peer
+  const store2 = new Corestore(await t.tmp())
+  t.teardown(() => store2.close(), { order: 4000 })
+
+  const localCore = store2.get({ manifest })
+  t.teardown(() => localCore.close())
+  t.is(localCore.length, 0, '2nd signer core is new')
+
+  const s1 = store.replicate(true)
+  const s2 = store2.replicate(false)
+  t.teardown(() => {
+    s1.destroy()
+    s2.destroy()
+  })
+  s1.pipe(s2).pipe(s1)
+
+  await once(localCore, 'append')
+
+  // Sparsely populate localCore with blocks: 0, 1, 4
+  await localCore.get(0)
+  await localCore.get(1)
+  await localCore.get(4)
+
+  t.is(localCore.length, core.length, 'same lengths')
+  t.alike(localCore.key, core.key, 'same key')
+
+  // Stop replication
+  s1.destroy()
+  s2.destroy()
+
+  t.alike(await Hypercore.treeHashFromStorage(localCore), await core.treeHash(), 'same treeHash')
+  t.absent(await localCore.has(0, core.length), '2nd signer core is missing blocks')
+
+  const differentFromCore = store.get({ name: 'differentFromCore' })
+  t.teardown(() => differentFromCore.close())
+  await differentFromCore.append(b4a.from('0'))
+  await differentFromCore.append(b4a.from('1'))
+  await differentFromCore.append(b4a.from('2'))
+  await differentFromCore.append(b4a.from('different-3'))
+  await differentFromCore.append(b4a.from('4'))
+  await differentFromCore.append(b4a.from('different-5'))
+
+  t.is(differentFromCore.length, fromCore.length, 'different batch length matches')
+  t.unlike(await differentFromCore.treeHash(), await fromCore.treeHash(), 'second batch differs')
+
+  await t.exception(
+    () => signCore(localCore, differentFromCore, signatures, { commit: true }),
+    /COMMIT_FAILED/,
+    'invalid commit throws commit failed'
+  )
+
+  t.is(localCore.length, core.length, 'length not updated after invalid commit')
+  t.alike(localCore.key, core.key, 'same key after invalid commit')
+  t.alike(
+    await Hypercore.treeHashFromStorage(localCore),
+    await core.treeHash(),
+    '2nd signer core treeHash is not updated after invalid commit'
+  )
+  t.absent(
+    await localCore.has(0, core.length),
+    '2nd signer core is still missing blocks after invalid commit'
+  )
+
+  const batch = await signCore(localCore, fromCore, signatures, { commit: true })
+  t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
+  t.is(batch.length, fromCore.length, 'batch length is correct')
+  t.is(batch.treeHash, idEnc.normalize(await fromCore.treeHash()), 'batch treeHash is correct')
+  t.ok(await localCore.has(0, fromCore.length), '2nd signer core has all blocks')
+})
+
 test('sign core remotely', async (t) => {
   t.timeout(120000)
   const { store, swarm, store2, swarm2, multisig, multisig2, signers, publicKeys, namespace } =
@@ -649,6 +738,66 @@ test('commit core', async (t) => {
   t.is(idEnc.normalize(core.key), result.destCore.key)
   t.is(core.key.toString('hex'), result.destCore.keyHex)
   t.is(result.destCore.length, srcCore.length, 'core length is correct')
+})
+
+test('commit core with swarmAsServer false', async (t) => {
+  t.timeout(120000)
+
+  const { store, swarm, store2, swarm2, store3, swarm3, multisig, publicKeys, namespace, signers } =
+    await setupTest(t, 3)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
+
+  const targetCore2 = store2.get({ manifest })
+  const targetCore3 = store3.get({ manifest })
+  t.teardown(() => targetCore2.close())
+  t.teardown(() => targetCore3.close())
+  await Promise.all([targetCore2.ready(), targetCore3.ready()])
+
+  const { core, result } = await multisig
+    .commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+      force: true,
+      swarmAsServer: false
+    })
+    .done()
+  t.is(idEnc.normalize(core.key), result.destCore.key)
+  t.is(result.destCore.length, srcCore.length, 'core length is correct')
+
+  const peer2Session = swarm2.join(targetCore2.discoveryKey, { client: true, server: false })
+  const peer2Download = targetCore2.download({ start: 0, end: srcCore.length }).done()
+  await Promise.all([swarm.flush(), swarm2.flush()])
+
+  const peer2DownloadedFromMain = await Promise.race([
+    peer2Download.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 1000))
+  ])
+  t.absent(peer2DownloadedFromMain, 'peer 2 cannot download from client-only main')
+  t.absent(await targetCore2.has(0, srcCore.length), 'peer 2 has no blocks from main')
+
+  swarm3.join(targetCore3.discoveryKey, { client: true, server: true })
+  await swarm3.flush()
+
+  await Promise.all([swarm.status(core.discoveryKey).refresh(), peer2Session.refresh()])
+  await Promise.all([swarm.flush(), swarm2.flush(), swarm3.flush()])
+  await targetCore3.download({ start: 0, end: srcCore.length }).done()
+  t.alike(await targetCore3.treeHash(), await srcCore.treeHash(), 'peer 3 received committed core')
+
+  await peer2Download
+  t.alike(await targetCore2.treeHash(), await srcCore.treeHash(), 'peer 2 received committed core')
+  t.ok(await targetCore2.has(0, srcCore.length), 'peer 2 downloaded blocks from peer 3')
 })
 
 test('commit core multiple times', async (t) => {
