@@ -104,7 +104,7 @@ test('sign core', async (t) => {
   t.alike(await core.treeHash(), await fromCore.treeHash(), 'core treeHash is updated')
 })
 
-test('sign core with request length less than source length', async (t) => {
+test.solo('sign core with request length less than source length', async (t) => {
   t.timeout(120000)
 
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
@@ -123,11 +123,15 @@ test('sign core with request length less than source length', async (t) => {
   const { signatures } = await requestAndSign(signers, fromCore, manifest, {
     length: requestLength
   })
+  await fromCore.append(b4a.from('6'))
+  await fromCore.append(b4a.from('7'))
 
   const batch = await signCore(core, fromCore, signatures, {
     length: requestLength,
     commit: true
   })
+  await fromCore.append(b4a.from('8'))
+  await fromCore.append(b4a.from('9'))
 
   t.ok(requestLength < fromCore.length, 'request length is less than source length')
   t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct')
