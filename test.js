@@ -1690,6 +1690,56 @@ test('commit drive sanity checks throw correct errors', async (t) => {
   )
 })
 
+test('verify core remotely (can get tree hash)', async (t) => {
+  t.timeout(120000)
+  const { store, swarm, multisig, multisig2, publicKeys, namespace, signers, store2, swarm2 } =
+    await setupTest(t, 2)
+
+  /** @type {import('hypercore')} */
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+  swarm.join(srcCore.discoveryKey)
+
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
+  const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
+    force: true
+  })
+
+  const { core: multisigCore } = await commitCore.done()
+  swarm.join(multisigCore.discoveryKey)
+  await new Promise((resolve) => setTimeout(resolve, 200)) // flush swarm
+  await srcCore.append(b4a.from('3'))
+  await srcCore.append(b4a.from('4'))
+  await srcCore.append(b4a.from('5'))
+  await srcCore.append(b4a.from('6'))
+
+  const { request: request2 } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr2 = z32.encode(request2)
+
+  const readonlyFromCore = store2.get(srcCore.key)
+  swarm2.join(readonlyFromCore.discoveryKey)
+  await once(readonlyFromCore, 'append') // get length but no other info
+
+  const { result } = await multisig2
+    .commitCore(publicKeys, namespace, readonlyFromCore, reqStr2, [], { dryRun: true, minPeers: 1 })
+    .done()
+
+  t.pass('Could verify request (did not crash due to not being able to get the treeHash)')
+  t.is(result.srcCore.length, 7, 'sanity check')
+})
+
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
 async function requestAndSign(signers, fromCore, manifest, { length, isDrive } = {}) {
   const request = isDrive
