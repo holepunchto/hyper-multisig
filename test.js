@@ -1695,7 +1695,6 @@ test('verify core remotely (can get tree hash)', async (t) => {
   const { store, swarm, multisig, multisig2, publicKeys, namespace, signers, store2, swarm2 } =
     await setupTest(t, 2)
 
-  /** @type {import('hypercore')} */
   const srcCore = store.get({ name: 'srcCore' })
   t.teardown(() => srcCore.close())
   await srcCore.append(b4a.from('0'))
