@@ -145,7 +145,8 @@ class HyperMultisig {
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
       peerUpdateTimeout,
-      minFullCopies = 2
+      minFullCopies = 2,
+      minPeers
     } = {}
   ) {
     return new HyperMultisigRunner(async (runner) => {
@@ -162,7 +163,8 @@ class HyperMultisig {
         await verifyCoreCommittable(srcCore, core, length, treeHash, {
           skipTargetChecks,
           skipTargetWellSeeded,
-          peerUpdateTimeout
+          peerUpdateTimeout,
+          minPeers
         })
       }
 
