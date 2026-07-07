@@ -679,163 +679,6 @@ test('sign-core dry-run with start', async (t) => {
   }
 })
 
-test.skip('sign-drive dry-run with start', async (t) => {
-  t.timeout(120000)
-
-  const {
-    store,
-    store2,
-    store3,
-    swarm,
-    swarm2,
-    swarm3,
-    multisig,
-    multisig2,
-    multisig3,
-    signers,
-    publicKeys,
-    namespace
-  } = await setupTest(t, 3)
-
-  const fromDrive = new Hyperdrive(store)
-  t.teardown(() => fromDrive.close())
-  await fromDrive.ready()
-  swarm.join(fromDrive.discoveryKey)
-  await fromDrive.put('/file0', b4a.alloc(65536 * 4))
-  await fromDrive.put('/file1', b4a.alloc(65536 * 8))
-  await fromDrive.put('/file2', b4a.alloc(65536 * 12))
-
-  {
-    const { manifest, core, blobsCore } = await multisig.createDrive(publicKeys, namespace)
-    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive, manifest, {
-      isDrive: true
-    })
-    await signDrive(
-      core,
-      fromDrive.core,
-      signatures,
-      blobsCore,
-      fromDrive.blobs.core,
-      blobsSignatures,
-      {
-        commit: true
-      }
-    )
-    t.is(core.length, fromDrive.core.length, 'core length is updated')
-    t.is(blobsCore.length, fromDrive.blobs.core.length, 'blobsCore length is updated')
-    swarm.join(core.discoveryKey)
-  }
-
-  await fromDrive.put('/file3', b4a.alloc(65536 * 12))
-  await fromDrive.put('/file4', b4a.alloc(65536 * 16))
-  await fromDrive.put('/file5', b4a.alloc(65536 * 20))
-
-  {
-    const fromDrive2 = new Hyperdrive(store2, fromDrive.key)
-    t.teardown(() => fromDrive2.close())
-    await fromDrive2.ready()
-    swarm2.join(fromDrive2.discoveryKey)
-
-    let downloaded = 0
-    fromDrive2.core.on('download', () => {
-      downloaded++
-    })
-    await once(fromDrive2.core, 'peer-add')
-    await fromDrive2.core.update({ wait: true })
-    t.is(fromDrive2.core.length, 7, 'fromDrive2.core length is correct')
-    t.is(fromDrive2.core.contiguousLength, 0, 'fromDrive2.core contiguous length is 0')
-
-    await fromDrive2.getBlobs()
-    let blobsDownloaded = 0
-    fromDrive2.blobs.core.on('download', () => {
-      blobsDownloaded++
-    })
-    await once(fromDrive2.blobs.core, 'peer-add')
-    await fromDrive2.blobs.core.update({ wait: true })
-    t.is(fromDrive2.blobs.core.length, 72, 'fromDrive2.blobs.core length is correct')
-    t.is(fromDrive2.blobs.core.contiguousLength, 0, 'fromDrive2.blobs.core contiguous length is 0')
-
-    const { manifest, core, blobsCore } = await multisig2.createDrive(publicKeys, namespace)
-    swarm2.join(core.discoveryKey)
-    await Promise.all([once(core, 'peer-add'), once(blobsCore, 'peer-add')])
-
-    await core.update({ wait: true })
-    t.is(core.length, 4, 'core length is correct')
-    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
-
-    await blobsCore.update({ wait: true })
-    t.is(blobsCore.length, 24, 'blobsCore length is correct')
-    t.is(blobsCore.contiguousLength, 0, 'blobsCore contiguous length is 0')
-
-    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive2, manifest, {
-      isDrive: true
-    })
-    await signDrive(
-      core,
-      fromDrive2.core,
-      signatures,
-      blobsCore,
-      fromDrive2.blobs.core,
-      blobsSignatures
-    )
-    t.is(downloaded, 7, '7 db blocks downloaded')
-    t.is(blobsDownloaded, 72, '72 blobs blocks downloaded')
-  }
-
-  {
-    const fromDrive3 = new Hyperdrive(store3, fromDrive.key)
-    t.teardown(() => fromDrive3.close())
-    await fromDrive3.ready()
-    swarm3.join(fromDrive3.discoveryKey)
-
-    let downloaded = 0
-    fromDrive3.core.on('download', () => {
-      downloaded++
-    })
-    await once(fromDrive3.core, 'peer-add')
-    await fromDrive3.core.update({ wait: true })
-    t.is(fromDrive3.core.length, 7, 'fromDrive3.core length is correct')
-    t.is(fromDrive3.core.contiguousLength, 0, 'fromDrive3.core contiguous length is 0')
-
-    await fromDrive3.getBlobs()
-    let blobsDownloaded = 0
-    fromDrive3.blobs.core.on('download', () => {
-      blobsDownloaded++
-    })
-    await once(fromDrive3.blobs.core, 'peer-add')
-    await fromDrive3.blobs.core.update({ wait: true })
-    t.is(fromDrive3.blobs.core.length, 72, 'fromDrive3.blobs.core length is correct')
-    t.is(fromDrive3.blobs.core.contiguousLength, 0, 'fromDrive3.blobs.core contiguous length is 0')
-
-    const { manifest, core, blobsCore } = await multisig3.createDrive(publicKeys, namespace)
-    swarm3.join(core.discoveryKey)
-    await Promise.all([once(core, 'peer-add'), once(blobsCore, 'peer-add')])
-
-    await core.update({ wait: true })
-    t.is(core.length, 4, 'core length is correct')
-    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
-
-    await blobsCore.update({ wait: true })
-    t.is(blobsCore.length, 24, 'blobsCore length is correct')
-    t.is(blobsCore.contiguousLength, 0, 'blobsCore contiguous length is 0')
-
-    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive3, manifest, {
-      isDrive: true
-    })
-    await signDrive(
-      core,
-      fromDrive3.core,
-      signatures,
-      blobsCore,
-      fromDrive3.blobs.core,
-      blobsSignatures,
-      { start: 4, blobsStart: 24 }
-    )
-    t.is(downloaded, 3, '3 db blocks downloaded')
-    t.is(blobsDownloaded, 48, '48 blobs blocks downloaded')
-  }
-})
-
 test('sign drive', async (t) => {
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
 
@@ -1040,6 +883,163 @@ test('sign drive remotely', async (t) => {
       await fromBlobsCore2.treeHash(),
       'blobsCore treeHash is updated [2]'
     )
+  }
+})
+
+test.skip('sign-drive dry-run with start', async (t) => {
+  t.timeout(120000)
+
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const fromDrive = new Hyperdrive(store)
+  t.teardown(() => fromDrive.close())
+  await fromDrive.ready()
+  swarm.join(fromDrive.discoveryKey)
+  await fromDrive.put('/file0', b4a.alloc(65536 * 4))
+  await fromDrive.put('/file1', b4a.alloc(65536 * 8))
+  await fromDrive.put('/file2', b4a.alloc(65536 * 12))
+
+  {
+    const { manifest, core, blobsCore } = await multisig.createDrive(publicKeys, namespace)
+    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive, manifest, {
+      isDrive: true
+    })
+    await signDrive(
+      core,
+      fromDrive.core,
+      signatures,
+      blobsCore,
+      fromDrive.blobs.core,
+      blobsSignatures,
+      {
+        commit: true
+      }
+    )
+    t.is(core.length, fromDrive.core.length, 'core length is updated')
+    t.is(blobsCore.length, fromDrive.blobs.core.length, 'blobsCore length is updated')
+    swarm.join(core.discoveryKey)
+  }
+
+  await fromDrive.put('/file3', b4a.alloc(65536 * 12))
+  await fromDrive.put('/file4', b4a.alloc(65536 * 16))
+  await fromDrive.put('/file5', b4a.alloc(65536 * 20))
+
+  {
+    const fromDrive2 = new Hyperdrive(store2, fromDrive.key)
+    t.teardown(() => fromDrive2.close())
+    await fromDrive2.ready()
+    swarm2.join(fromDrive2.discoveryKey)
+
+    let downloaded = 0
+    fromDrive2.core.on('download', () => {
+      downloaded++
+    })
+    await once(fromDrive2.core, 'peer-add')
+    await fromDrive2.core.update({ wait: true })
+    t.is(fromDrive2.core.length, 7, 'fromDrive2.core length is correct')
+    t.is(fromDrive2.core.contiguousLength, 0, 'fromDrive2.core contiguous length is 0')
+
+    await fromDrive2.getBlobs()
+    let blobsDownloaded = 0
+    fromDrive2.blobs.core.on('download', () => {
+      blobsDownloaded++
+    })
+    await once(fromDrive2.blobs.core, 'peer-add')
+    await fromDrive2.blobs.core.update({ wait: true })
+    t.is(fromDrive2.blobs.core.length, 72, 'fromDrive2.blobs.core length is correct')
+    t.is(fromDrive2.blobs.core.contiguousLength, 0, 'fromDrive2.blobs.core contiguous length is 0')
+
+    const { manifest, core, blobsCore } = await multisig2.createDrive(publicKeys, namespace)
+    swarm2.join(core.discoveryKey)
+    await Promise.all([once(core, 'peer-add'), once(blobsCore, 'peer-add')])
+
+    await core.update({ wait: true })
+    t.is(core.length, 4, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    await blobsCore.update({ wait: true })
+    t.is(blobsCore.length, 24, 'blobsCore length is correct')
+    t.is(blobsCore.contiguousLength, 0, 'blobsCore contiguous length is 0')
+
+    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive2, manifest, {
+      isDrive: true
+    })
+    await signDrive(
+      core,
+      fromDrive2.core,
+      signatures,
+      blobsCore,
+      fromDrive2.blobs.core,
+      blobsSignatures
+    )
+    t.is(downloaded, 7, '7 db blocks downloaded')
+    t.is(blobsDownloaded, 72, '72 blobs blocks downloaded')
+  }
+
+  {
+    const fromDrive3 = new Hyperdrive(store3, fromDrive.key)
+    t.teardown(() => fromDrive3.close())
+    await fromDrive3.ready()
+    swarm3.join(fromDrive3.discoveryKey)
+
+    let downloaded = 0
+    fromDrive3.core.on('download', () => {
+      downloaded++
+    })
+    await once(fromDrive3.core, 'peer-add')
+    await fromDrive3.core.update({ wait: true })
+    t.is(fromDrive3.core.length, 7, 'fromDrive3.core length is correct')
+    t.is(fromDrive3.core.contiguousLength, 0, 'fromDrive3.core contiguous length is 0')
+
+    await fromDrive3.getBlobs()
+    let blobsDownloaded = 0
+    fromDrive3.blobs.core.on('download', () => {
+      blobsDownloaded++
+    })
+    await once(fromDrive3.blobs.core, 'peer-add')
+    await fromDrive3.blobs.core.update({ wait: true })
+    t.is(fromDrive3.blobs.core.length, 72, 'fromDrive3.blobs.core length is correct')
+    t.is(fromDrive3.blobs.core.contiguousLength, 0, 'fromDrive3.blobs.core contiguous length is 0')
+
+    const { manifest, core, blobsCore } = await multisig3.createDrive(publicKeys, namespace)
+    swarm3.join(core.discoveryKey)
+    await Promise.all([once(core, 'peer-add'), once(blobsCore, 'peer-add')])
+
+    await core.update({ wait: true })
+    t.is(core.length, 4, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    await blobsCore.update({ wait: true })
+    t.is(blobsCore.length, 24, 'blobsCore length is correct')
+    t.is(blobsCore.contiguousLength, 0, 'blobsCore contiguous length is 0')
+
+    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive3, manifest, {
+      isDrive: true
+    })
+    await signDrive(
+      core,
+      fromDrive3.core,
+      signatures,
+      blobsCore,
+      fromDrive3.blobs.core,
+      blobsSignatures,
+      { start: 4, blobsStart: 24 }
+    )
+    t.is(downloaded, 3, '3 db blocks downloaded')
+    t.is(blobsDownloaded, 48, '48 blobs blocks downloaded')
   }
 })
 
