@@ -206,7 +206,7 @@ test('sign core multiple times (dry-run)', async (t) => {
   }
 })
 
-test('sign core multiple times', async (t) => {
+test.solo('sign core multiple times', async (t) => {
   t.timeout(120000)
 
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
@@ -281,6 +281,23 @@ test('sign core multiple times', async (t) => {
     )
     t.is(core.length, beforeSigning.length, 'core length is not changed [4]')
     t.alike(await core.treeHash(), beforeSigning.treeHash, 'core treeHash is not changed [4]')
+    t.absent(await batch.has(0, 3), 'batch does not have blocks 0-2')
+    t.is(await batch.has(3, 6), 'batch has blocks 3-5')
+  }
+
+  {
+    const batch = await signCore(core, fromCore, signatures2, { start: 2 })
+    t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [4]')
+    t.is(batch.length, fromCore.length, 'batch length is correct [4]')
+    t.is(
+      batch.treeHash,
+      idEnc.normalize(await fromCore.treeHash()),
+      'batch treeHash is correct [4]'
+    )
+    t.is(core.length, beforeSigning.length, 'core length is not changed [4]')
+    t.alike(await core.treeHash(), beforeSigning.treeHash, 'core treeHash is not changed [4]')
+    t.absent(await batch.has(0, 1), 'batch does not have block 0-1')
+    t.is(await batch.has(2, 6), 'batch has blocks 2-6')
   }
 
   {
