@@ -625,11 +625,6 @@ test('sign-core dry-run with start', async (t) => {
     const fromCore2 = store2.get({ key: fromCore.key })
     t.teardown(() => fromCore2.close())
 
-    let downloaded = 0
-    fromCore2.on('download', () => {
-      downloaded++
-    })
-
     await fromCore2.ready()
     swarm2.join(fromCore2.discoveryKey)
     await once(fromCore2, 'peer-add')
@@ -646,17 +641,12 @@ test('sign-core dry-run with start', async (t) => {
 
     const { signatures } = await requestAndSign(signers, fromCore2, manifest)
     await signCore(core, fromCore2, signatures)
-    t.is(downloaded, 6, '6 blocks downloaded')
+    t.ok(await fromCore2.has(0, 6), 'fromCore2 has all blocks')
   }
 
   {
     const fromCore3 = store3.get({ key: fromCore.key })
     t.teardown(() => fromCore3.close())
-
-    let downloaded = 0
-    fromCore3.on('download', () => {
-      downloaded++
-    })
 
     await fromCore3.ready()
     swarm3.join(fromCore3.discoveryKey)
@@ -675,7 +665,10 @@ test('sign-core dry-run with start', async (t) => {
     const { signatures } = await requestAndSign(signers, fromCore3, manifest)
 
     await signCore(core, fromCore3, signatures, { start: 3 })
-    t.is(downloaded, 3, '3 blocks downloaded')
+    t.absent(await fromCore3.has(0), 'fromCore3 does not have block 0')
+    t.absent(await fromCore3.has(1), 'fromCore3 does not have block 1')
+    t.absent(await fromCore3.has(2), 'fromCore3 does not have block 2')
+    t.ok(await fromCore3.has(3, 6), 'fromCore3 has block 3, 4, 5')
   }
 })
 
