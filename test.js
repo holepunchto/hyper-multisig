@@ -560,7 +560,7 @@ test('createUpdateBatch with start', async (t) => {
   {
     const { core } = await multisig2.createCore(publicKeys, namespace)
     swarm2.join(core.discoveryKey)
-    await core.download({ start: 2, end: 3 }).done() // download the last block only
+    await core.get(2) // manually download the last block
     t.is(core.length, 3, 'core length is correct')
     t.is(core.contiguousLength, 0, 'core contiguous length is 0')
 
@@ -571,7 +571,7 @@ test('createUpdateBatch with start', async (t) => {
   {
     const { core } = await multisig3.createCore(publicKeys, namespace)
     swarm3.join(core.discoveryKey)
-    await core.download({ start: 2, end: 3 }).done() // download the last block only
+    await core.get(2) // manually download the last block
     t.is(core.length, 3, 'core length is correct')
     t.is(core.contiguousLength, 0, 'core contiguous length is 0')
 
