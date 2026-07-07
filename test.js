@@ -523,7 +523,7 @@ test('sign core remotely', async (t) => {
   }
 })
 
-test('createUpdateBatch with start', async (t) => {
+test.solo('createUpdateBatch with start', async (t) => {
   const {
     store,
     swarm,
@@ -560,7 +560,8 @@ test('createUpdateBatch with start', async (t) => {
   {
     const { core } = await multisig2.createCore(publicKeys, namespace)
     swarm2.join(core.discoveryKey)
-    await core.get(2) // manually download the last block
+    await once(core, 'peer-add')
+    await core.update({ wait: true })
     t.is(core.length, 3, 'core length is correct')
     t.is(core.contiguousLength, 0, 'core contiguous length is 0')
 
@@ -571,14 +572,15 @@ test('createUpdateBatch with start', async (t) => {
   {
     const { core } = await multisig3.createCore(publicKeys, namespace)
     swarm3.join(core.discoveryKey)
-    await core.get(2) // manually download the last block
+    await once(core, 'peer-add')
+    await core.update({ wait: true })
     t.is(core.length, 3, 'core length is correct')
     t.is(core.contiguousLength, 0, 'core contiguous length is 0')
 
     const batch = await createUpdateBatch(core, fromCore, { start: 3 })
     t.absent(await batch.has(0), 'batch does not have block 0')
     t.absent(await batch.has(1), 'batch does not have block 1')
-    t.ok(await batch.has(2), 'batch has block 2')
+    t.absent(await batch.has(2), 'batch does not have block 2')
     t.ok(await batch.has(3, 6), 'batch has block 3, 4, 5')
   }
 })
