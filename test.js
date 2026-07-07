@@ -523,7 +523,7 @@ test('sign core remotely', async (t) => {
   }
 })
 
-test.solo('createUpdateBatch with start', async (t) => {
+test('createUpdateBatch with start', async (t) => {
   const {
     store,
     swarm,
