@@ -14,7 +14,7 @@ const z32 = require('z32')
 const { once } = require('events')
 
 const { getCoreKey } = require('./lib/core')
-const { signCore, signDrive } = require('./lib/sign')
+const { signCore, signDrive, createUpdateBatch } = require('./lib/sign')
 const { waitUntilSufficientPeers, waitUntilFullySeeded } = require('./lib/verify')
 const Multisig = require('.')
 
@@ -206,7 +206,7 @@ test('sign core multiple times (dry-run)', async (t) => {
   }
 })
 
-test.solo('sign core multiple times', async (t) => {
+test('sign core multiple times', async (t) => {
   t.timeout(120000)
 
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
@@ -281,23 +281,6 @@ test.solo('sign core multiple times', async (t) => {
     )
     t.is(core.length, beforeSigning.length, 'core length is not changed [4]')
     t.alike(await core.treeHash(), beforeSigning.treeHash, 'core treeHash is not changed [4]')
-    t.absent(await batch.has(0, 3), 'batch does not have blocks 0-2')
-    t.is(await batch.has(3, 6), 'batch has blocks 3-5')
-  }
-
-  {
-    const batch = await signCore(core, fromCore, signatures2, { start: 2 })
-    t.is(batch.key, idEnc.normalize(core.key), 'batch key is correct [4]')
-    t.is(batch.length, fromCore.length, 'batch length is correct [4]')
-    t.is(
-      batch.treeHash,
-      idEnc.normalize(await fromCore.treeHash()),
-      'batch treeHash is correct [4]'
-    )
-    t.is(core.length, beforeSigning.length, 'core length is not changed [4]')
-    t.alike(await core.treeHash(), beforeSigning.treeHash, 'core treeHash is not changed [4]')
-    t.absent(await batch.has(0, 1), 'batch does not have block 0-1')
-    t.is(await batch.has(2, 6), 'batch has blocks 2-6')
   }
 
   {
@@ -537,6 +520,66 @@ test('sign core remotely', async (t) => {
     )
     t.is(core.length, fromCore2.length, 'core length is updated [2]')
     t.alike(await core.treeHash(), await fromCore2.treeHash(), 'core treeHash is updated [2]')
+  }
+})
+
+test('createUpdateBatch with start', async (t) => {
+  const {
+    store,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const fromCore = store.get({ name: 'fromCore' })
+  t.teardown(() => fromCore.close())
+  await fromCore.ready()
+  swarm.join(fromCore.discoveryKey)
+  await fromCore.append(b4a.from('0'))
+  await fromCore.append(b4a.from('1'))
+  await fromCore.append(b4a.from('2'))
+
+  {
+    const { manifest, core } = await multisig.createCore(publicKeys, namespace)
+    const { signatures } = await requestAndSign(signers, fromCore, manifest)
+    await signCore(core, fromCore, signatures, { commit: true })
+    t.is(core.length, fromCore.length, 'core length is updated')
+    swarm.join(core.discoveryKey)
+  }
+
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
+
+  {
+    const { core } = await multisig2.createCore(publicKeys, namespace)
+    swarm2.join(core.discoveryKey)
+    await core.download({ start: 2, end: 3 }).done() // download the last block only
+    t.is(core.length, 3, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    const batch = await createUpdateBatch(core, fromCore)
+    t.ok(await batch.has(0, 6), 'batch has all blocks')
+  }
+
+  {
+    const { core } = await multisig3.createCore(publicKeys, namespace)
+    swarm3.join(core.discoveryKey)
+    await core.download({ start: 2, end: 3 }).done() // download the last block only
+    t.is(core.length, 3, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    const batch = await createUpdateBatch(core, fromCore, { start: 3 })
+    t.absent(await batch.has(0), 'batch does not have block 0')
+    t.absent(await batch.has(1), 'batch does not have block 1')
+    t.ok(await batch.has(2), 'batch has block 2')
+    t.ok(await batch.has(3, 6), 'batch has block 3, 4, 5')
   }
 })
 
@@ -1806,6 +1849,7 @@ async function signResponse(request, signer) {
  *   swarm2?: import('hyperswarm'),
  *   multisig: Multisig,
  *   multisig2?: Multisig,
+ *   multisig3?: Multisig,
  *   namespace: string,
  *   signers: { id: Buffer, publicKey: Buffer, secretKey: Buffer, seed: Buffer }[],
  *   publicKeys: string[]
@@ -1816,6 +1860,7 @@ async function setupTest(t, n, { numSigners } = {}) {
 
   res.multisig = new Multisig(res.store, res.swarm)
   if (res.store2) res.multisig2 = new Multisig(res.store2, res.swarm2)
+  if (res.store3) res.multisig3 = new Multisig(res.store3, res.swarm3)
 
   return { ...res, ...(await setupMultisig(undefined, numSigners)) }
 }
