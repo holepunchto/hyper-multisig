@@ -585,6 +585,100 @@ test('createUpdateBatch with start', async (t) => {
   }
 })
 
+test('sign-core dry-run with start', async (t) => {
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const fromCore = store.get({ name: 'fromCore' })
+  t.teardown(() => fromCore.close())
+  await fromCore.ready()
+  swarm.join(fromCore.discoveryKey)
+  await fromCore.append(b4a.from('0'))
+  await fromCore.append(b4a.from('1'))
+  await fromCore.append(b4a.from('2'))
+
+  {
+    const { manifest, core } = await multisig.createCore(publicKeys, namespace)
+    const { signatures } = await requestAndSign(signers, fromCore, manifest)
+    await signCore(core, fromCore, signatures, { commit: true })
+    t.is(core.length, fromCore.length, 'core length is updated')
+    swarm.join(core.discoveryKey)
+  }
+
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
+
+  {
+    const fromCore2 = store2.get({ key: fromCore.key })
+    t.teardown(() => fromCore2.close())
+
+    let downloaded = 0
+    fromCore2.on('download', () => {
+      downloaded++
+    })
+
+    await fromCore2.ready()
+    swarm2.join(fromCore2.discoveryKey)
+    await once(fromCore2, 'peer-add')
+    await fromCore2.update({ wait: true })
+    t.is(fromCore2.length, 6, 'fromCore2 length is correct')
+    t.is(fromCore2.contiguousLength, 0, 'fromCore2 contiguous length is 0')
+
+    const { manifest, core } = await multisig2.createCore(publicKeys, namespace)
+    swarm2.join(core.discoveryKey)
+    await once(core, 'peer-add')
+    await core.update({ wait: true })
+    t.is(core.length, 3, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    const { signatures } = await requestAndSign(signers, fromCore2, manifest)
+    await signCore(core, fromCore2, signatures)
+    t.is(downloaded, 6, '6 blocks downloaded')
+  }
+
+  {
+    const fromCore3 = store3.get({ key: fromCore.key })
+    t.teardown(() => fromCore3.close())
+
+    let downloaded = 0
+    fromCore3.on('download', () => {
+      downloaded++
+    })
+
+    await fromCore3.ready()
+    swarm3.join(fromCore3.discoveryKey)
+    await once(fromCore3, 'peer-add')
+    await fromCore3.update({ wait: true })
+    t.is(fromCore3.length, 6, 'fromCore3 length is correct')
+    t.is(fromCore3.contiguousLength, 0, 'fromCore3 contiguous length is 0')
+
+    const { manifest, core } = await multisig3.createCore(publicKeys, namespace)
+    swarm3.join(core.discoveryKey)
+    await once(core, 'peer-add')
+    await core.update({ wait: true })
+    t.is(core.length, 3, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    const { signatures } = await requestAndSign(signers, fromCore3, manifest)
+
+    await signCore(core, fromCore3, signatures, { start: 3 })
+    t.is(downloaded, 3, '3 blocks downloaded')
+  }
+})
+
 test('sign drive', async (t) => {
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
 
