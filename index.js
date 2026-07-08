@@ -217,6 +217,7 @@ class HyperMultisig {
     responses,
     {
       start,
+      blobsStart,
       quorum,
       dryRun,
       swarmAsServer = true,
@@ -277,10 +278,6 @@ class HyperMultisig {
       const blobsSignatures = allSignatures.map((item) => item?.[1])
 
       runner.emit('commit-start')
-      let blobsStart
-      if (start) {
-        blobsStart = await srcDrive.getBlobsLength(start)
-      }
       const { batch, blobsBatch } = await signDrive(
         core,
         srcDrive.core,
