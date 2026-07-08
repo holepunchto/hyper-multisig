@@ -936,24 +936,14 @@ test.skip('sign-drive dry-run with start', async (t) => {
     await fromDrive2.ready()
     swarm2.join(fromDrive2.discoveryKey)
 
-    let downloaded = 0
-    fromDrive2.core.on('download', () => {
-      downloaded++
-    })
-    await once(fromDrive2.core, 'peer-add')
-    await fromDrive2.core.update({ wait: true })
-    t.is(fromDrive2.core.length, 7, 'fromDrive2.core length is correct')
-    t.is(fromDrive2.core.contiguousLength, 0, 'fromDrive2.core contiguous length is 0')
-
     await fromDrive2.getBlobs()
-    let blobsDownloaded = 0
-    fromDrive2.blobs.core.on('download', () => {
-      blobsDownloaded++
-    })
-    await once(fromDrive2.blobs.core, 'peer-add')
     await fromDrive2.blobs.core.update({ wait: true })
     t.is(fromDrive2.blobs.core.length, 72, 'fromDrive2.blobs.core length is correct')
     t.is(fromDrive2.blobs.core.contiguousLength, 0, 'fromDrive2.blobs.core contiguous length is 0')
+
+    await fromDrive2.core.update({ wait: true })
+    t.is(fromDrive2.core.length, 7, 'fromDrive2.core length is correct')
+    t.is(fromDrive2.core.contiguousLength, 1, 'fromDrive2.core contiguous length is 0')
 
     const { manifest, core, blobsCore } = await multisig2.createDrive(publicKeys, namespace)
     swarm2.join(core.discoveryKey)
@@ -978,8 +968,7 @@ test.skip('sign-drive dry-run with start', async (t) => {
       fromDrive2.blobs.core,
       blobsSignatures
     )
-    t.is(downloaded, 7, '7 db blocks downloaded')
-    t.is(blobsDownloaded, 72, '72 blobs blocks downloaded')
+    t.ok(await fromDrive2.has(0, 7), 'fromDrive2 has all blocks')
   }
 
   {
@@ -988,24 +977,14 @@ test.skip('sign-drive dry-run with start', async (t) => {
     await fromDrive3.ready()
     swarm3.join(fromDrive3.discoveryKey)
 
-    let downloaded = 0
-    fromDrive3.core.on('download', () => {
-      downloaded++
-    })
-    await once(fromDrive3.core, 'peer-add')
-    await fromDrive3.core.update({ wait: true })
-    t.is(fromDrive3.core.length, 7, 'fromDrive3.core length is correct')
-    t.is(fromDrive3.core.contiguousLength, 0, 'fromDrive3.core contiguous length is 0')
-
     await fromDrive3.getBlobs()
-    let blobsDownloaded = 0
-    fromDrive3.blobs.core.on('download', () => {
-      blobsDownloaded++
-    })
-    await once(fromDrive3.blobs.core, 'peer-add')
     await fromDrive3.blobs.core.update({ wait: true })
     t.is(fromDrive3.blobs.core.length, 72, 'fromDrive3.blobs.core length is correct')
     t.is(fromDrive3.blobs.core.contiguousLength, 0, 'fromDrive3.blobs.core contiguous length is 0')
+
+    await fromDrive3.core.update({ wait: true })
+    t.is(fromDrive3.core.length, 7, 'fromDrive3.core length is correct')
+    t.is(fromDrive3.core.contiguousLength, 1, 'fromDrive3.core contiguous length is 0')
 
     const { manifest, core, blobsCore } = await multisig3.createDrive(publicKeys, namespace)
     swarm3.join(core.discoveryKey)
@@ -1020,7 +999,8 @@ test.skip('sign-drive dry-run with start', async (t) => {
     t.is(blobsCore.contiguousLength, 0, 'blobsCore contiguous length is 0')
 
     const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive3, manifest, {
-      isDrive: true
+      isDrive: true,
+      blobsLength: fromDrive3.blobs.core.length
     })
     await signDrive(
       core,
@@ -1031,8 +1011,11 @@ test.skip('sign-drive dry-run with start', async (t) => {
       blobsSignatures,
       { start: 4, blobsStart: 24 }
     )
-    t.is(downloaded, 3, '3 db blocks downloaded')
-    t.is(blobsDownloaded, 48, '48 blobs blocks downloaded')
+    t.ok(await fromDrive3.core.has(0), `fromDrive3 has block 0`)
+    t.absent(await fromDrive3.core.has(1), `fromDrive3 does not have block 1`)
+    t.absent(await fromDrive3.core.has(2), `fromDrive3 does not have block 2`)
+    t.absent(await fromDrive3.core.has(3), `fromDrive3 does not have block 3`)
+    t.ok(await fromDrive3.core.has(4, 7), 'fromDrive3 has blocks 4, 5, 6')
   }
 })
 
@@ -2046,9 +2029,9 @@ test('verify core remotely (can get tree hash)', async (t) => {
 })
 
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
-async function requestAndSign(signers, fromCore, manifest, { length, isDrive } = {}) {
+async function requestAndSign(signers, fromCore, manifest, { length, blobsLength, isDrive } = {}) {
   const request = isDrive
-    ? await SignRequest.generateDrive(fromCore, { manifest, length })
+    ? await SignRequest.generateDrive(fromCore, { manifest, length, blobsLength })
     : await SignRequest.generate(fromCore, { manifest, length })
 
   const allSignatures = await Promise.all(
