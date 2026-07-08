@@ -585,7 +585,7 @@ test('createUpdateBatch with start', async (t) => {
   }
 })
 
-test('sign-core dry-run with start', async (t) => {
+test('sign core dry-run with start', async (t) => {
   const {
     store,
     store2,
@@ -639,7 +639,7 @@ test('sign-core dry-run with start', async (t) => {
     t.is(core.length, 3, 'core length is correct')
     t.is(core.contiguousLength, 0, 'core contiguous length is 0')
 
-    const { signatures } = await requestAndSign(signers, fromCore2, manifest)
+    const { signatures } = await requestAndSign(signers, fromCore, manifest)
     await signCore(core, fromCore2, signatures)
     t.ok(await fromCore2.has(0, 6), 'fromCore2 has all blocks')
   }
@@ -662,7 +662,7 @@ test('sign-core dry-run with start', async (t) => {
     t.is(core.length, 3, 'core length is correct')
     t.is(core.contiguousLength, 0, 'core contiguous length is 0')
 
-    const { signatures } = await requestAndSign(signers, fromCore3, manifest)
+    const { signatures } = await requestAndSign(signers, fromCore, manifest)
 
     await signCore(core, fromCore3, signatures, { start: 3 })
     t.absent(await fromCore3.has(0), 'fromCore3 does not have block 0')
@@ -879,7 +879,7 @@ test('sign drive remotely', async (t) => {
   }
 })
 
-test('sign-drive dry-run with start', async (t) => {
+test('sign drive dry-run with start', async (t) => {
   t.timeout(120000)
 
   const {
@@ -998,7 +998,7 @@ test('sign-drive dry-run with start', async (t) => {
     t.is(blobsCore.length, 24, 'blobsCore length is correct')
     t.is(blobsCore.contiguousLength, 0, 'blobsCore contiguous length is 0')
 
-    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive3, manifest, {
+    const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive, manifest, {
       isDrive: true
     })
     await signDrive(
