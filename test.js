@@ -1000,7 +1000,6 @@ test('sign-drive dry-run with start', async (t) => {
 
     const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive3, manifest, {
       isDrive: true,
-      blobsLength: fromDrive3.blobs.core.length
     })
     await signDrive(
       core,
@@ -2029,9 +2028,9 @@ test('verify core remotely (can get tree hash)', async (t) => {
 })
 
 /** @type {function(): Promise<{ signatures: Buffer[], blobsSignatures: Buffer[] }>} */
-async function requestAndSign(signers, fromCore, manifest, { length, blobsLength, isDrive } = {}) {
+async function requestAndSign(signers, fromCore, manifest, { length, isDrive } = {}) {
   const request = isDrive
-    ? await SignRequest.generateDrive(fromCore, { manifest, length, blobsLength })
+    ? await SignRequest.generateDrive(fromCore, { manifest, length })
     : await SignRequest.generate(fromCore, { manifest, length })
 
   const allSignatures = await Promise.all(
