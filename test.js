@@ -999,7 +999,7 @@ test('sign-drive dry-run with start', async (t) => {
     t.is(blobsCore.contiguousLength, 0, 'blobsCore contiguous length is 0')
 
     const { signatures, blobsSignatures } = await requestAndSign(signers, fromDrive3, manifest, {
-      isDrive: true,
+      isDrive: true
     })
     await signDrive(
       core,
