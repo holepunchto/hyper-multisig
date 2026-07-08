@@ -879,7 +879,7 @@ test('sign drive remotely', async (t) => {
   }
 })
 
-test.skip('sign-drive dry-run with start', async (t) => {
+test('sign-drive dry-run with start', async (t) => {
   t.timeout(120000)
 
   const {
