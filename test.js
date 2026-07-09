@@ -1162,6 +1162,110 @@ test('commit core multiple times', async (t) => {
   t.is(result2.destCore.length, srcCore.length, 'core length is correct')
 })
 
+test('commit core dry-run with start', async (t) => {
+  t.timeout(120000)
+
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.ready()
+  swarm.join(srcCore.discoveryKey)
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  {
+    const { manifest, request } = await multisig
+      .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { core, result } = await multisig
+      .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
+      .done()
+    t.is(result.destCore.length, srcCore.length, 'core length is correct')
+    t.is(core.length, srcCore.length, 'core length is updated')
+  }
+
+  await srcCore.append(b4a.from('3'))
+  await srcCore.append(b4a.from('4'))
+  await srcCore.append(b4a.from('5'))
+
+  {
+    const srcCore2 = store2.get({ key: srcCore.key })
+    t.teardown(() => srcCore2.close())
+
+    await srcCore2.ready()
+    swarm2.join(srcCore2.discoveryKey)
+    await once(srcCore2, 'peer-add')
+    await srcCore2.update({ wait: true })
+    t.is(srcCore2.length, 6, 'srcCore2 length is correct')
+    t.is(srcCore2.contiguousLength, 0, 'srcCore2 contiguous length is 0')
+
+    const { manifest, request } = await multisig2
+      .requestCore(publicKeys, namespace, srcCore2, srcCore2.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    await multisig2
+      .commitCore(publicKeys, namespace, srcCore2, reqStr, responses, {
+        force: true,
+        dryRun: true
+      })
+      .done()
+    t.ok(await srcCore2.has(0, 6), 'srcCore2 has all blocks')
+  }
+
+  {
+    const srcCore3 = store3.get({ key: srcCore.key })
+    t.teardown(() => srcCore3.close())
+
+    await srcCore3.ready()
+    swarm3.join(srcCore3.discoveryKey)
+    await once(srcCore3, 'peer-add')
+    await srcCore3.update({ wait: true })
+    t.is(srcCore3.length, 6, 'srcCore3 length is correct')
+    t.is(srcCore3.contiguousLength, 0, 'srcCore3 contiguous length is 0')
+
+    const { manifest, request } = await multisig3
+      .requestCore(publicKeys, namespace, srcCore3, srcCore3.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    await multisig3
+      .commitCore(publicKeys, namespace, srcCore3, reqStr, responses, {
+        force: true,
+        dryRun: true,
+        start: 3
+      })
+      .done()
+    t.absent(await srcCore3.has(0), 'srcCore3 does not have block 0')
+    t.absent(await srcCore3.has(1), 'srcCore3 does not have block 1')
+    t.absent(await srcCore3.has(2), 'srcCore3 does not have block 2')
+    t.ok(await srcCore3.has(3, 6), 'srcCore3 has blocks 3, 4, 5')
+  }
+})
+
 test('request core sanity checks throw correct errors', async (t) => {
   const { store, store2, store3, swarm, swarm2, swarm3, multisig, publicKeys, namespace } =
     await setupTest(t, 4, { numSigners: 1 })
