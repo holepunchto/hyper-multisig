@@ -936,6 +936,41 @@ test('commit core multiple times', async (t) => {
   t.is(result2.destCore.length, srcCore.length, 'core length is correct')
 })
 
+test('verify core', async (t) => {
+  t.timeout(120000)
+
+  const { store, multisig, publicKeys, namespace, signers } = await setupTest(t)
+
+  /** @type {import('hypercore')} */
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  const { manifest, request } = await multisig
+    .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
+  const { core, quorum, result } = await multisig
+    .verifyCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
+    .done()
+
+  t.is(quorum, manifest.quorum, 'quorum is met')
+  t.is(result.batch.length, srcCore.length, 'batch length is correct')
+  t.is(
+    result.batch.treeHash,
+    idEnc.normalize(await srcCore.treeHash()),
+    'batch treeHash is correct'
+  )
+  t.is(result.destCore.length, 0, 'core is not committed by verify')
+  t.is(core.length, 0, 'core is not committed by verify')
+})
+
 test('commit core dry-run with start', async (t) => {
   t.timeout(120000)
 
@@ -1431,6 +1466,48 @@ test('commit drive multiple times', async (t) => {
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, { force: true })
     .done()
   t.is(result2.db.destCore.length, srcDrive.core.length, 'core length is correct')
+})
+
+test('verify drive', async (t) => {
+  t.timeout(60000)
+
+  const { store, multisig, publicKeys, namespace, signers } = await setupTest(t)
+
+  const srcDrive = new Hyperdrive(store)
+  t.teardown(() => srcDrive.close())
+  await srcDrive.put('/file1', b4a.from('0'))
+  await srcDrive.put('/file2', b4a.from('1'))
+  await srcDrive.put('/file3', b4a.from('2'))
+
+  const { manifest, request } = await multisig
+    .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+    .done()
+  const reqStr = z32.encode(request)
+
+  const responses = await Promise.all(
+    signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+  )
+  const { core, blobsCore, quorum, result } = await multisig
+    .verifyDrive(publicKeys, namespace, srcDrive, reqStr, responses, { force: true })
+    .done()
+
+  t.is(quorum, manifest.quorum, 'quorum is met')
+  t.is(result.db.batch.length, srcDrive.core.length, 'db batch length is correct')
+  t.is(
+    result.db.batch.treeHash,
+    idEnc.normalize(await srcDrive.core.treeHash()),
+    'db batch treeHash is correct'
+  )
+  t.is(result.blobs.batch.length, srcDrive.blobs.core.length, 'blobs batch length is correct')
+  t.is(
+    result.blobs.batch.treeHash,
+    idEnc.normalize(await srcDrive.blobs.core.treeHash()),
+    'blobs batch treeHash is correct'
+  )
+  t.is(result.db.destCore.length, 0, 'core is not committed by verify')
+  t.is(result.blobs.destCore.length, 0, 'blobsCore is not committed by verify')
+  t.is(core.length, 0, 'core is not committed by verify')
+  t.is(blobsCore.length, 0, 'blobsCore is not committed by verify')
 })
 
 test('commit drive dry-run with start', async (t) => {
