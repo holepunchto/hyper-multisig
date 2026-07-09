@@ -1725,7 +1725,7 @@ test('commit drive dry-run with start', async (t) => {
     t.is(srcDrive2.core.contiguousLength, 1, 'srcDrive2.core contiguous length is 0')
 
     const { manifest, request } = await multisig2
-      .requestDrive(publicKeys, namespace, srcDrive2, srcDrive2.version, { force: true })
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
       .done()
     const reqStr = z32.encode(request)
     const responses = await Promise.all(
@@ -1756,7 +1756,7 @@ test('commit drive dry-run with start', async (t) => {
     t.is(srcDrive3.core.contiguousLength, 1, 'srcDrive3.core contiguous length is 0')
 
     const { manifest, request } = await multisig3
-      .requestDrive(publicKeys, namespace, srcDrive3, srcDrive3.version, { force: true })
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
       .done()
     const reqStr = z32.encode(request)
     const responses = await Promise.all(
