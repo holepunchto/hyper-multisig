@@ -1663,6 +1663,121 @@ test('commit drive multiple times', async (t) => {
   t.is(result2.db.destCore.length, srcDrive.core.length, 'core length is correct')
 })
 
+test('commit drive dry-run with start', async (t) => {
+  t.timeout(120000)
+
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const srcDrive = new Hyperdrive(store)
+  t.teardown(() => srcDrive.close())
+  await srcDrive.ready()
+  swarm.join(srcDrive.discoveryKey)
+  await srcDrive.put('/file0', b4a.alloc(65536 * 4))
+  await srcDrive.put('/file1', b4a.alloc(65536 * 8))
+  await srcDrive.put('/file2', b4a.alloc(65536 * 12))
+
+  {
+    const { manifest, request } = await multisig
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { core, blobsCore, result } = await multisig
+      .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, { force: true })
+      .done()
+    t.is(result.db.destCore.length, srcDrive.core.length, 'core length is correct')
+    t.is(core.length, srcDrive.core.length, 'core length is updated')
+    t.is(blobsCore.length, srcDrive.blobs.core.length, 'blobsCore length is updated')
+  }
+
+  await srcDrive.put('/file3', b4a.alloc(65536 * 12))
+  await srcDrive.put('/file4', b4a.alloc(65536 * 16))
+  await srcDrive.put('/file5', b4a.alloc(65536 * 20))
+
+  {
+    const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
+    t.teardown(() => srcDrive2.close())
+    await srcDrive2.ready()
+    swarm2.join(srcDrive2.discoveryKey)
+
+    await srcDrive2.getBlobs()
+    await srcDrive2.blobs.core.update({ wait: true })
+    t.is(srcDrive2.blobs.core.length, 72, 'srcDrive2.blobs.core length is correct')
+    t.is(srcDrive2.blobs.core.contiguousLength, 0, 'srcDrive2.blobs.core contiguous length is 0')
+
+    await srcDrive2.core.update({ wait: true })
+    t.is(srcDrive2.core.length, 7, 'srcDrive2.core length is correct')
+    t.is(srcDrive2.core.contiguousLength, 1, 'srcDrive2.core contiguous length is 0')
+
+    const { manifest, request } = await multisig2
+      .requestDrive(publicKeys, namespace, srcDrive2, srcDrive2.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    await multisig2
+      .commitDrive(publicKeys, namespace, srcDrive2, reqStr, responses, {
+        force: true,
+        dryRun: true
+      })
+      .done()
+    t.ok(await srcDrive2.core.has(0, 7), 'srcDrive2 has all blocks')
+  }
+
+  {
+    const srcDrive3 = new Hyperdrive(store3, srcDrive.key)
+    t.teardown(() => srcDrive3.close())
+    await srcDrive3.ready()
+    swarm3.join(srcDrive3.discoveryKey)
+
+    await srcDrive3.getBlobs()
+    await srcDrive3.blobs.core.update({ wait: true })
+    t.is(srcDrive3.blobs.core.length, 72, 'srcDrive3.blobs.core length is correct')
+    t.is(srcDrive3.blobs.core.contiguousLength, 0, 'srcDrive3.blobs.core contiguous length is 0')
+
+    await srcDrive3.core.update({ wait: true })
+    t.is(srcDrive3.core.length, 7, 'srcDrive3.core length is correct')
+    t.is(srcDrive3.core.contiguousLength, 1, 'srcDrive3.core contiguous length is 0')
+
+    const { manifest, request } = await multisig3
+      .requestDrive(publicKeys, namespace, srcDrive3, srcDrive3.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    await multisig3
+      .commitDrive(publicKeys, namespace, srcDrive3, reqStr, responses, {
+        force: true,
+        dryRun: true,
+        start: 4,
+        blobsStart: 24
+      })
+      .done()
+    t.ok(await srcDrive3.core.has(0), 'srcDrive3 has block 0')
+    t.absent(await srcDrive3.core.has(1), 'srcDrive3 does not have block 1')
+    t.absent(await srcDrive3.core.has(2), 'srcDrive3 does not have block 2')
+    t.absent(await srcDrive3.core.has(3), 'srcDrive3 does not have block 3')
+    t.ok(await srcDrive3.core.has(4, 7), 'srcDrive3 has blocks 4, 5, 6')
+  }
+})
+
 test('request drive sanity checks throw correct errors', async (t) => {
   const { store, store2, store3, swarm, swarm2, swarm3, multisig, publicKeys, namespace } =
     await setupTest(t, 4, { numSigners: 1 })
