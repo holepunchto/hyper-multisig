@@ -1577,13 +1577,10 @@ test('commit drive multiple times', async (t) => {
 test('verify drive', async (t) => {
   t.timeout(60000)
 
-  const { store, store2, swarm, swarm2, multisig, multisig2, publicKeys, namespace, signers } =
-    await setupTest(t, 2)
+  const { store, multisig, publicKeys, namespace, signers } = await setupTest(t)
 
   const srcDrive = new Hyperdrive(store)
   t.teardown(() => srcDrive.close())
-  await srcDrive.ready()
-  swarm.join(srcDrive.discoveryKey)
   await srcDrive.put('/file1', b4a.from('0'))
   await srcDrive.put('/file2', b4a.from('1'))
   await srcDrive.put('/file3', b4a.from('2'))
@@ -1617,61 +1614,126 @@ test('verify drive', async (t) => {
   t.is(result.blobs.destCore.length, 0, 'blobsCore is not committed by verify')
   t.is(core.length, 0, 'core is not committed by verify')
   t.is(blobsCore.length, 0, 'blobsCore is not committed by verify')
+})
 
-  // verifying remotely downloads the blocks needed to check the treeHash, even though
-  // nothing gets committed
-  const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
-  t.teardown(() => srcDrive2.close())
-  await srcDrive2.ready()
-  swarm2.join(srcDrive2.discoveryKey)
+test('verify drive downloads full and partial blocks', async (t) => {
+  t.timeout(120000)
 
-  await srcDrive2.getBlobs()
-  await srcDrive2.blobs.core.update({ wait: true })
-  t.is(
-    srcDrive2.blobs.core.length,
-    srcDrive.blobs.core.length,
-    'srcDrive2.blobs.core length is correct'
-  )
-  t.is(
-    srcDrive2.blobs.core.contiguousLength,
-    0,
-    'srcDrive2.blobs.core has no blocks downloaded yet'
-  )
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
 
-  await srcDrive2.core.update({ wait: true })
-  t.is(srcDrive2.core.length, srcDrive.core.length, 'srcDrive2.core length is correct')
-  t.not(
-    srcDrive2.core.contiguousLength,
-    srcDrive2.core.length,
-    'srcDrive2.core has not fully downloaded yet'
-  )
+  const srcDrive = new Hyperdrive(store)
+  t.teardown(() => srcDrive.close())
+  await srcDrive.ready()
+  swarm.join(srcDrive.discoveryKey)
+  await srcDrive.put('/file0', b4a.alloc(65536 * 4))
+  await srcDrive.put('/file1', b4a.alloc(65536 * 8))
+  await srcDrive.put('/file2', b4a.alloc(65536 * 12))
 
-  const { manifest: manifest2, request: request2 } = await multisig2
-    .requestDrive(publicKeys, namespace, srcDrive2, srcDrive2.version, { force: true })
-    .done()
-  const reqStr2 = z32.encode(request2)
+  {
+    const { manifest, request } = await multisig
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { core, blobsCore } = await multisig
+      .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, { force: true })
+      .done()
+    t.is(core.length, srcDrive.core.length, 'core length is updated')
+    t.is(blobsCore.length, srcDrive.blobs.core.length, 'blobsCore length is updated')
+  }
 
-  const responses2 = await Promise.all(
-    signers.slice(0, manifest2.quorum).map((signer) => signResponse(request2, signer))
-  )
-  const { result: result2 } = await multisig2
-    .verifyDrive(publicKeys, namespace, srcDrive2, reqStr2, responses2, { force: true })
-    .done()
+  await srcDrive.put('/file3', b4a.alloc(65536 * 12))
+  await srcDrive.put('/file4', b4a.alloc(65536 * 16))
+  await srcDrive.put('/file5', b4a.alloc(65536 * 20))
 
-  t.is(result2.db.batch.length, srcDrive2.core.length, 'remote db batch length is correct')
-  t.is(
-    result2.blobs.batch.length,
-    srcDrive2.blobs.core.length,
-    'remote blobs batch length is correct'
-  )
-  t.ok(
-    await srcDrive2.core.has(0, srcDrive2.core.length),
-    'srcDrive2 downloaded db blocks while verifying'
-  )
-  t.ok(
-    await srcDrive2.blobs.core.has(0, srcDrive2.blobs.core.length),
-    'srcDrive2 downloaded blobs blocks while verifying'
-  )
+  {
+    const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
+    t.teardown(() => srcDrive2.close())
+    await srcDrive2.ready()
+    swarm2.join(srcDrive2.discoveryKey)
+
+    await srcDrive2.getBlobs()
+    await srcDrive2.blobs.core.update({ wait: true })
+    t.is(srcDrive2.blobs.core.length, 72, 'srcDrive2.blobs.core length is correct')
+    t.is(srcDrive2.blobs.core.contiguousLength, 0, 'srcDrive2.blobs.core contiguous length is 0')
+
+    await srcDrive2.core.update({ wait: true })
+    t.is(srcDrive2.core.length, 7, 'srcDrive2.core length is correct')
+    t.is(srcDrive2.core.contiguousLength, 1, 'srcDrive2.core contiguous length is 1')
+
+    const { manifest, request } = await multisig2
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { result } = await multisig2
+      .verifyDrive(publicKeys, namespace, srcDrive2, reqStr, responses, { force: true })
+      .done()
+
+    t.is(result.db.batch.length, srcDrive2.core.length, 'db batch length is correct')
+    t.is(result.blobs.batch.length, srcDrive2.blobs.core.length, 'blobs batch length is correct')
+    t.ok(await srcDrive2.core.has(0, 7), 'srcDrive2 downloaded all db blocks while verifying')
+    t.ok(
+      await srcDrive2.blobs.core.has(0, 72),
+      'srcDrive2 downloaded all blobs blocks while verifying'
+    )
+  }
+
+  {
+    const srcDrive3 = new Hyperdrive(store3, srcDrive.key)
+    t.teardown(() => srcDrive3.close())
+    await srcDrive3.ready()
+    swarm3.join(srcDrive3.discoveryKey)
+
+    await srcDrive3.getBlobs()
+    await srcDrive3.blobs.core.update({ wait: true })
+    t.is(srcDrive3.blobs.core.length, 72, 'srcDrive3.blobs.core length is correct')
+    t.is(srcDrive3.blobs.core.contiguousLength, 0, 'srcDrive3.blobs.core contiguous length is 0')
+
+    await srcDrive3.core.update({ wait: true })
+    t.is(srcDrive3.core.length, 7, 'srcDrive3.core length is correct')
+    t.is(srcDrive3.core.contiguousLength, 1, 'srcDrive3.core contiguous length is 1')
+
+    const { manifest, request } = await multisig3
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { result } = await multisig3
+      .verifyDrive(publicKeys, namespace, srcDrive3, reqStr, responses, {
+        force: true,
+        start: 4,
+        blobsStart: 24
+      })
+      .done()
+
+    t.is(result.db.batch.length, srcDrive3.core.length, 'db batch length is correct')
+    t.is(result.blobs.batch.length, srcDrive3.blobs.core.length, 'blobs batch length is correct')
+    t.ok(await srcDrive3.core.has(0), 'srcDrive3 has block 0')
+    t.absent(await srcDrive3.core.has(1), 'srcDrive3 does not have block 1')
+    t.absent(await srcDrive3.core.has(2), 'srcDrive3 does not have block 2')
+    t.absent(await srcDrive3.core.has(3), 'srcDrive3 does not have block 3')
+    t.ok(await srcDrive3.core.has(4, 7), 'srcDrive3 has blocks 4, 5, 6')
+  }
 })
 
 test('commit drive dry-run with start', async (t) => {
