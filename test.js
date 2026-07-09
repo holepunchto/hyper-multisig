@@ -971,6 +971,112 @@ test('verify core', async (t) => {
   t.is(core.length, 0, 'core is not committed by verify')
 })
 
+test('verify core downloads full and partial blocks', async (t) => {
+  t.timeout(120000)
+
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.ready()
+  swarm.join(srcCore.discoveryKey)
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  {
+    const { manifest, request } = await multisig
+      .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { core } = await multisig
+      .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
+      .done()
+    t.is(core.length, srcCore.length, 'core length is updated')
+  }
+
+  await srcCore.append(b4a.from('3'))
+  await srcCore.append(b4a.from('4'))
+  await srcCore.append(b4a.from('5'))
+
+  {
+    const srcCore2 = store2.get({ key: srcCore.key })
+    t.teardown(() => srcCore2.close())
+    await srcCore2.ready()
+    swarm2.join(srcCore2.discoveryKey)
+    await once(srcCore2, 'peer-add')
+    await srcCore2.update({ wait: true })
+    t.is(srcCore2.length, 6, 'srcCore2 length is correct')
+    t.is(srcCore2.contiguousLength, 0, 'srcCore2 contiguous length is 0')
+
+    const { manifest, request } = await multisig2
+      .requestCore(publicKeys, namespace, srcCore2, srcCore2.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { result } = await multisig2
+      .verifyCore(publicKeys, namespace, srcCore2, reqStr, responses, { force: true })
+      .done()
+
+    t.is(result.batch.length, srcCore2.length, 'batch length is correct')
+    t.is(
+      result.batch.treeHash,
+      idEnc.normalize(await srcCore2.treeHash()),
+      'batch treeHash is correct'
+    )
+    t.ok(await srcCore2.has(0, 6), 'srcCore2 downloaded all blocks while verifying')
+  }
+
+  {
+    const srcCore3 = store3.get({ key: srcCore.key })
+    t.teardown(() => srcCore3.close())
+    await srcCore3.ready()
+    swarm3.join(srcCore3.discoveryKey)
+    await once(srcCore3, 'peer-add')
+    await srcCore3.update({ wait: true })
+    t.is(srcCore3.length, 6, 'srcCore3 length is correct')
+    t.is(srcCore3.contiguousLength, 0, 'srcCore3 contiguous length is 0')
+
+    const { manifest, request } = await multisig3
+      .requestCore(publicKeys, namespace, srcCore3, srcCore3.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { result } = await multisig3
+      .verifyCore(publicKeys, namespace, srcCore3, reqStr, responses, {
+        force: true,
+        start: 3
+      })
+      .done()
+
+    t.is(result.batch.length, srcCore3.length, 'batch length is correct')
+    t.absent(await srcCore3.has(0), 'srcCore3 does not have block 0')
+    t.absent(await srcCore3.has(1), 'srcCore3 does not have block 1')
+    t.absent(await srcCore3.has(2), 'srcCore3 does not have block 2')
+    t.ok(await srcCore3.has(3, 6), 'srcCore3 has blocks 3, 4, 5')
+  }
+})
+
 test('commit core dry-run with start', async (t) => {
   t.timeout(120000)
 
@@ -1471,10 +1577,13 @@ test('commit drive multiple times', async (t) => {
 test('verify drive', async (t) => {
   t.timeout(60000)
 
-  const { store, multisig, publicKeys, namespace, signers } = await setupTest(t)
+  const { store, store2, swarm, swarm2, multisig, multisig2, publicKeys, namespace, signers } =
+    await setupTest(t, 2)
 
   const srcDrive = new Hyperdrive(store)
   t.teardown(() => srcDrive.close())
+  await srcDrive.ready()
+  swarm.join(srcDrive.discoveryKey)
   await srcDrive.put('/file1', b4a.from('0'))
   await srcDrive.put('/file2', b4a.from('1'))
   await srcDrive.put('/file3', b4a.from('2'))
@@ -1508,6 +1617,61 @@ test('verify drive', async (t) => {
   t.is(result.blobs.destCore.length, 0, 'blobsCore is not committed by verify')
   t.is(core.length, 0, 'core is not committed by verify')
   t.is(blobsCore.length, 0, 'blobsCore is not committed by verify')
+
+  // verifying remotely downloads the blocks needed to check the treeHash, even though
+  // nothing gets committed
+  const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
+  t.teardown(() => srcDrive2.close())
+  await srcDrive2.ready()
+  swarm2.join(srcDrive2.discoveryKey)
+
+  await srcDrive2.getBlobs()
+  await srcDrive2.blobs.core.update({ wait: true })
+  t.is(
+    srcDrive2.blobs.core.length,
+    srcDrive.blobs.core.length,
+    'srcDrive2.blobs.core length is correct'
+  )
+  t.is(
+    srcDrive2.blobs.core.contiguousLength,
+    0,
+    'srcDrive2.blobs.core has no blocks downloaded yet'
+  )
+
+  await srcDrive2.core.update({ wait: true })
+  t.is(srcDrive2.core.length, srcDrive.core.length, 'srcDrive2.core length is correct')
+  t.not(
+    srcDrive2.core.contiguousLength,
+    srcDrive2.core.length,
+    'srcDrive2.core has not fully downloaded yet'
+  )
+
+  const { manifest: manifest2, request: request2 } = await multisig2
+    .requestDrive(publicKeys, namespace, srcDrive2, srcDrive2.version, { force: true })
+    .done()
+  const reqStr2 = z32.encode(request2)
+
+  const responses2 = await Promise.all(
+    signers.slice(0, manifest2.quorum).map((signer) => signResponse(request2, signer))
+  )
+  const { result: result2 } = await multisig2
+    .verifyDrive(publicKeys, namespace, srcDrive2, reqStr2, responses2, { force: true })
+    .done()
+
+  t.is(result2.db.batch.length, srcDrive2.core.length, 'remote db batch length is correct')
+  t.is(
+    result2.blobs.batch.length,
+    srcDrive2.blobs.core.length,
+    'remote blobs batch length is correct'
+  )
+  t.ok(
+    await srcDrive2.core.has(0, srcDrive2.core.length),
+    'srcDrive2 downloaded db blocks while verifying'
+  )
+  t.ok(
+    await srcDrive2.blobs.core.has(0, srcDrive2.blobs.core.length),
+    'srcDrive2 downloaded blobs blocks while verifying'
+  )
 })
 
 test('commit drive dry-run with start', async (t) => {
