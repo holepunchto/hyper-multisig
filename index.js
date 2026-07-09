@@ -185,8 +185,8 @@ class HyperMultisig {
     request,
     responses,
     {
-      start,
-      blobsStart,
+      start = null,
+      blobsStart = null,
       quorum,
       swarmAsServer = true,
       force = false,
