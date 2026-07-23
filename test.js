@@ -992,15 +992,12 @@ test('commit core dry-run with start', async (t) => {
     t.is(srcCore2.length, 6, 'srcCore2 length is correct')
     t.is(srcCore2.contiguousLength, 0, 'srcCore2 contiguous length is 0')
 
-    const { manifest, request } = await multisig2
+    const { request } = await multisig2
       .requestCore(publicKeys, namespace, srcCore2, srcCore2.length, { force: true })
       .done()
     const reqStr = z32.encode(request)
-    const responses = await Promise.all(
-      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-    )
     await multisig2
-      .commitCore(publicKeys, namespace, srcCore2, reqStr, responses, {
+      .commitCore(publicKeys, namespace, srcCore2, reqStr, [], {
         force: true,
         dryRun: true
       })
@@ -1019,7 +1016,7 @@ test('commit core dry-run with start', async (t) => {
     t.is(srcCore3.length, 6, 'srcCore3 length is correct')
     t.is(srcCore3.contiguousLength, 0, 'srcCore3 contiguous length is 0')
 
-    const { manifest, request } = await multisig3
+    const { request } = await multisig3
       .requestCore(publicKeys, namespace, srcCore3, srcCore3.length, { force: true })
       .done()
     const reqStr = z32.encode(request)
@@ -1495,15 +1492,12 @@ test('commit drive dry-run with start', async (t) => {
     t.is(srcDrive2.core.length, 7, 'srcDrive2.core length is correct')
     t.is(srcDrive2.core.contiguousLength, 1, 'srcDrive2.core contiguous length is 0')
 
-    const { manifest, request } = await multisig2
+    const { request } = await multisig2
       .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
       .done()
     const reqStr = z32.encode(request)
-    const responses = await Promise.all(
-      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-    )
     await multisig2
-      .commitDrive(publicKeys, namespace, srcDrive2, reqStr, responses, {
+      .commitDrive(publicKeys, namespace, srcDrive2, reqStr, [], {
         force: true,
         dryRun: true
       })
