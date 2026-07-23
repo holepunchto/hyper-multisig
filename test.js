@@ -1023,11 +1023,8 @@ test('commit core dry-run with start', async (t) => {
       .requestCore(publicKeys, namespace, srcCore3, srcCore3.length, { force: true })
       .done()
     const reqStr = z32.encode(request)
-    const responses = await Promise.all(
-      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-    )
     await multisig3
-      .commitCore(publicKeys, namespace, srcCore3, reqStr, responses, {
+      .commitCore(publicKeys, namespace, srcCore3, reqStr, [], {
         force: true,
         dryRun: true,
         start: 3
@@ -1533,11 +1530,8 @@ test('commit drive dry-run with start', async (t) => {
       .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
       .done()
     const reqStr = z32.encode(request)
-    const responses = await Promise.all(
-      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
-    )
     await multisig3
-      .commitDrive(publicKeys, namespace, srcDrive3, reqStr, responses, {
+      .commitDrive(publicKeys, namespace, srcDrive3, reqStr, [], {
         force: true,
         dryRun: true,
         start: 4,
