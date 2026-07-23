@@ -981,6 +981,7 @@ test('commit core dry-run with start', async (t) => {
   await srcCore.append(b4a.from('4'))
   await srcCore.append(b4a.from('5'))
 
+  // without start, it will download all blocks from the source core
   {
     const srcCore2 = store2.get({ key: srcCore.key })
     t.teardown(() => srcCore2.close())
@@ -1005,6 +1006,7 @@ test('commit core dry-run with start', async (t) => {
     t.ok(await srcCore2.has(0, 6), 'srcCore2 has all blocks')
   }
 
+  // with start, it will only download blocks 3-5 from the source core
   {
     const srcCore3 = store3.get({ key: srcCore.key })
     t.teardown(() => srcCore3.close())
@@ -1477,6 +1479,7 @@ test('commit drive dry-run with start', async (t) => {
   await srcDrive.put('/file4', b4a.alloc(65536 * 16))
   await srcDrive.put('/file5', b4a.alloc(65536 * 20))
 
+  // without start, it will download all blocks from the source drive
   {
     const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
     t.teardown(() => srcDrive2.close())
@@ -1505,6 +1508,7 @@ test('commit drive dry-run with start', async (t) => {
     t.ok(await srcDrive2.core.has(0, 7), 'srcDrive2 has all blocks')
   }
 
+  // with start, it will only download blocks 4-7 from the source drive
   {
     const srcDrive3 = new Hyperdrive(store3, srcDrive.key)
     t.teardown(() => srcDrive3.close())
