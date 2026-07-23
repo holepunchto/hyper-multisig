@@ -14,7 +14,7 @@ const z32 = require('z32')
 const { once } = require('events')
 
 const { getCoreKey } = require('./lib/core')
-const { signCore, signDrive } = require('./lib/sign')
+const { signCore, signDrive, createUpdateBatch } = require('./lib/sign')
 const { waitUntilSufficientPeers, waitUntilFullySeeded } = require('./lib/verify')
 const Multisig = require('.')
 
@@ -523,6 +523,68 @@ test('sign core remotely', async (t) => {
   }
 })
 
+test('createUpdateBatch with start', async (t) => {
+  const {
+    store,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const fromCore = store.get({ name: 'fromCore' })
+  t.teardown(() => fromCore.close())
+  await fromCore.ready()
+  swarm.join(fromCore.discoveryKey)
+  await fromCore.append(b4a.from('0'))
+  await fromCore.append(b4a.from('1'))
+  await fromCore.append(b4a.from('2'))
+
+  {
+    const { manifest, core } = await multisig.createCore(publicKeys, namespace)
+    const { signatures } = await requestAndSign(signers, fromCore, manifest)
+    await signCore(core, fromCore, signatures, { commit: true })
+    t.is(core.length, fromCore.length, 'core length is updated')
+    swarm.join(core.discoveryKey)
+  }
+
+  await fromCore.append(b4a.from('3'))
+  await fromCore.append(b4a.from('4'))
+  await fromCore.append(b4a.from('5'))
+
+  {
+    const { core } = await multisig2.createCore(publicKeys, namespace)
+    swarm2.join(core.discoveryKey)
+    await once(core, 'peer-add')
+    await core.update({ wait: true })
+    t.is(core.length, 3, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    const batch = await createUpdateBatch(core, fromCore)
+    t.ok(await batch.has(0, 6), 'batch has all blocks')
+  }
+
+  {
+    const { core } = await multisig3.createCore(publicKeys, namespace)
+    swarm3.join(core.discoveryKey)
+    await once(core, 'peer-add')
+    await core.update({ wait: true })
+    t.is(core.length, 3, 'core length is correct')
+    t.is(core.contiguousLength, 0, 'core contiguous length is 0')
+
+    const batch = await createUpdateBatch(core, fromCore, { start: 3 })
+    t.absent(await batch.has(0), 'batch does not have block 0')
+    t.absent(await batch.has(1), 'batch does not have block 1')
+    t.absent(await batch.has(2), 'batch does not have block 2')
+    t.ok(await batch.has(3, 6), 'batch has block 3, 4, 5')
+  }
+})
+
 test('sign drive', async (t) => {
   const { store, signers, multisig, publicKeys, namespace } = await setupTest(t)
 
@@ -872,6 +934,106 @@ test('commit core multiple times', async (t) => {
     .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
     .done()
   t.is(result2.destCore.length, srcCore.length, 'core length is correct')
+})
+
+test('commit core dry-run with start', async (t) => {
+  t.timeout(120000)
+
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const srcCore = store.get({ name: 'srcCore' })
+  t.teardown(() => srcCore.close())
+  await srcCore.ready()
+  swarm.join(srcCore.discoveryKey)
+  await srcCore.append(b4a.from('0'))
+  await srcCore.append(b4a.from('1'))
+  await srcCore.append(b4a.from('2'))
+
+  {
+    const { manifest, request } = await multisig
+      .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { core, result } = await multisig
+      .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
+      .done()
+    t.is(result.destCore.length, srcCore.length, 'core length is correct')
+    t.is(core.length, srcCore.length, 'core length is updated')
+  }
+
+  await srcCore.append(b4a.from('3'))
+  await srcCore.append(b4a.from('4'))
+  await srcCore.append(b4a.from('5'))
+
+  // without start, it will download all blocks from the source core
+  {
+    const srcCore2 = store2.get({ key: srcCore.key })
+    t.teardown(() => srcCore2.close())
+
+    await srcCore2.ready()
+    swarm2.join(srcCore2.discoveryKey)
+    await once(srcCore2, 'peer-add')
+    await srcCore2.update({ wait: true })
+    t.is(srcCore2.length, 6, 'srcCore2 length is correct')
+    t.is(srcCore2.contiguousLength, 0, 'srcCore2 contiguous length is 0')
+
+    const { request } = await multisig2
+      .requestCore(publicKeys, namespace, srcCore2, srcCore2.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    await multisig2
+      .commitCore(publicKeys, namespace, srcCore2, reqStr, [], {
+        force: true,
+        dryRun: true
+      })
+      .done()
+    t.ok(await srcCore2.has(0, 6), 'srcCore2 has all blocks')
+  }
+
+  // with start, it will only download blocks 3-5 from the source core
+  {
+    const srcCore3 = store3.get({ key: srcCore.key })
+    t.teardown(() => srcCore3.close())
+
+    await srcCore3.ready()
+    swarm3.join(srcCore3.discoveryKey)
+    await once(srcCore3, 'peer-add')
+    await srcCore3.update({ wait: true })
+    t.is(srcCore3.length, 6, 'srcCore3 length is correct')
+    t.is(srcCore3.contiguousLength, 0, 'srcCore3 contiguous length is 0')
+
+    const { request } = await multisig3
+      .requestCore(publicKeys, namespace, srcCore3, srcCore3.length, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    await multisig3
+      .commitCore(publicKeys, namespace, srcCore3, reqStr, [], {
+        force: true,
+        dryRun: true,
+        start: 3
+      })
+      .done()
+    t.absent(await srcCore3.has(0), 'srcCore3 does not have block 0')
+    t.absent(await srcCore3.has(1), 'srcCore3 does not have block 1')
+    t.absent(await srcCore3.has(2), 'srcCore3 does not have block 2')
+    t.ok(await srcCore3.has(3, 6), 'srcCore3 has blocks 3, 4, 5')
+  }
 })
 
 test('request core sanity checks throw correct errors', async (t) => {
@@ -1269,6 +1431,117 @@ test('commit drive multiple times', async (t) => {
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, { force: true })
     .done()
   t.is(result2.db.destCore.length, srcDrive.core.length, 'core length is correct')
+})
+
+test('commit drive dry-run with start', async (t) => {
+  t.timeout(120000)
+
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig2,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
+
+  const srcDrive = new Hyperdrive(store)
+  t.teardown(() => srcDrive.close())
+  await srcDrive.ready()
+  swarm.join(srcDrive.discoveryKey)
+  await srcDrive.put('/file0', b4a.alloc(65536 * 4))
+  await srcDrive.put('/file1', b4a.alloc(65536 * 8))
+  await srcDrive.put('/file2', b4a.alloc(65536 * 12))
+
+  {
+    const { manifest, request } = await multisig
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    const responses = await Promise.all(
+      signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
+    )
+    const { core, blobsCore, result } = await multisig
+      .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, { force: true })
+      .done()
+    t.is(result.db.destCore.length, srcDrive.core.length, 'core length is correct')
+    t.is(core.length, srcDrive.core.length, 'core length is updated')
+    t.is(blobsCore.length, srcDrive.blobs.core.length, 'blobsCore length is updated')
+  }
+
+  await srcDrive.put('/file3', b4a.alloc(65536 * 12))
+  await srcDrive.put('/file4', b4a.alloc(65536 * 16))
+  await srcDrive.put('/file5', b4a.alloc(65536 * 20))
+
+  // without start, it will download all blocks from the source drive
+  {
+    const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
+    t.teardown(() => srcDrive2.close())
+    await srcDrive2.ready()
+    swarm2.join(srcDrive2.discoveryKey)
+
+    await srcDrive2.getBlobs()
+    await srcDrive2.blobs.core.update({ wait: true })
+    t.is(srcDrive2.blobs.core.length, 72, 'srcDrive2.blobs.core length is correct')
+    t.is(srcDrive2.blobs.core.contiguousLength, 0, 'srcDrive2.blobs.core contiguous length is 0')
+
+    await srcDrive2.core.update({ wait: true })
+    t.is(srcDrive2.core.length, 7, 'srcDrive2.core length is correct')
+    t.is(srcDrive2.core.contiguousLength, 1, 'srcDrive2.core contiguous length is 0')
+
+    const { request } = await multisig2
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    await multisig2
+      .commitDrive(publicKeys, namespace, srcDrive2, reqStr, [], {
+        force: true,
+        dryRun: true
+      })
+      .done()
+    t.ok(await srcDrive2.core.has(0, 7), 'srcDrive2 has all blocks')
+  }
+
+  // with start, it will only download blocks 4-7 from the source drive
+  {
+    const srcDrive3 = new Hyperdrive(store3, srcDrive.key)
+    t.teardown(() => srcDrive3.close())
+    await srcDrive3.ready()
+    swarm3.join(srcDrive3.discoveryKey)
+
+    await srcDrive3.getBlobs()
+    await srcDrive3.blobs.core.update({ wait: true })
+    t.is(srcDrive3.blobs.core.length, 72, 'srcDrive3.blobs.core length is correct')
+    t.is(srcDrive3.blobs.core.contiguousLength, 0, 'srcDrive3.blobs.core contiguous length is 0')
+
+    await srcDrive3.core.update({ wait: true })
+    t.is(srcDrive3.core.length, 7, 'srcDrive3.core length is correct')
+    t.is(srcDrive3.core.contiguousLength, 1, 'srcDrive3.core contiguous length is 0')
+
+    const { manifest, request } = await multisig3
+      .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
+      .done()
+    const reqStr = z32.encode(request)
+    await multisig3
+      .commitDrive(publicKeys, namespace, srcDrive3, reqStr, [], {
+        force: true,
+        dryRun: true,
+        start: 4,
+        blobsStart: 24
+      })
+      .done()
+    t.ok(await srcDrive3.core.has(0), 'srcDrive3 has block 0')
+    t.absent(await srcDrive3.core.has(1), 'srcDrive3 does not have block 1')
+    t.absent(await srcDrive3.core.has(2), 'srcDrive3 does not have block 2')
+    t.absent(await srcDrive3.core.has(3), 'srcDrive3 does not have block 3')
+    t.ok(await srcDrive3.core.has(4, 7), 'srcDrive3 has blocks 4, 5, 6')
+  }
 })
 
 test('request drive sanity checks throw correct errors', async (t) => {
@@ -1789,6 +2062,7 @@ async function signResponse(request, signer) {
  *   swarm2?: import('hyperswarm'),
  *   multisig: Multisig,
  *   multisig2?: Multisig,
+ *   multisig3?: Multisig,
  *   namespace: string,
  *   signers: { id: Buffer, publicKey: Buffer, secretKey: Buffer, seed: Buffer }[],
  *   publicKeys: string[]
@@ -1799,6 +2073,7 @@ async function setupTest(t, n, { numSigners } = {}) {
 
   res.multisig = new Multisig(res.store, res.swarm)
   if (res.store2) res.multisig2 = new Multisig(res.store2, res.swarm2)
+  if (res.store3) res.multisig3 = new Multisig(res.store3, res.swarm3)
 
   return { ...res, ...(await setupMultisig(undefined, numSigners)) }
 }
