@@ -1525,8 +1525,19 @@ test('commit drive multiple times', async (t) => {
 test('verify drive', async (t) => {
   t.timeout(120000)
 
-  const { store, store2, swarm, swarm2, multisig, multisig2, signers, publicKeys, namespace } =
-    await setupTest(t, 2)
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
 
   const srcDrive = new Hyperdrive(store)
   t.teardown(() => srcDrive.close())
@@ -1536,6 +1547,8 @@ test('verify drive', async (t) => {
   await srcDrive.put('/file1', b4a.alloc(65536 * 8))
   await srcDrive.put('/file2', b4a.alloc(65536 * 12))
 
+  let coreKey
+  let blobsKey
   // first commit
   {
     const { manifest, request } = await multisig
@@ -1550,44 +1563,66 @@ test('verify drive', async (t) => {
       .done()
     t.is(core.length, srcDrive.core.length, 'core length is updated')
     t.is(blobsCore.length, srcDrive.blobs.core.length, 'blobsCore length is updated')
+    coreKey = core.key
+    blobsKey = blobsCore.key
   }
+
+  const tgtCore2 = store2.get({ key: coreKey })
+  t.teardown(() => tgtCore2.close())
+  await tgtCore2.ready()
+  swarm2.join(tgtCore2.discoveryKey)
+  await tgtCore2.download({ start: 0, end: srcDrive.core.length }).done()
+
+  const tgtBlobs2 = store2.get({ key: blobsKey })
+  t.teardown(() => tgtBlobs2.close())
+  await tgtBlobs2.ready()
+  swarm2.join(tgtBlobs2.discoveryKey)
+  await tgtBlobs2.download({ start: 0, end: srcDrive.blobs.core.length }).done()
 
   await srcDrive.put('/file3', b4a.alloc(65536 * 12))
   await srcDrive.put('/file4', b4a.alloc(65536 * 16))
   await srcDrive.put('/file5', b4a.alloc(65536 * 20))
 
+  const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
+  t.teardown(() => srcDrive2.close())
+  await srcDrive2.ready()
+  swarm2.join(srcDrive2.discoveryKey)
+  await srcDrive2.getBlobs()
+  await srcDrive2.core.download({ start: 0, end: srcDrive.core.length }).done()
+  await srcDrive2.blobs.core.download({ start: 0, end: srcDrive.blobs.core.length }).done()
+
   // verify second commit, only download partial blocks from the source drive
   {
-    const srcDrive2 = new Hyperdrive(store2, srcDrive.key)
-    t.teardown(() => srcDrive2.close())
-    await srcDrive2.ready()
-    swarm2.join(srcDrive2.discoveryKey)
+    const srcDrive3 = new Hyperdrive(store3, srcDrive.key)
+    t.teardown(() => srcDrive3.close())
+    await srcDrive3.ready()
+    swarm3.join(srcDrive3.discoveryKey)
 
-    await srcDrive2.getBlobs()
-    await srcDrive2.blobs.core.update({ wait: true })
-    t.is(srcDrive2.blobs.core.length, 72, 'srcDrive2.blobs.core length is correct')
-    t.is(srcDrive2.blobs.core.contiguousLength, 0, 'srcDrive2.blobs.core contiguous length is 0')
+    await srcDrive3.getBlobs()
+    await srcDrive3.blobs.core.update({ wait: true })
+    t.is(srcDrive3.blobs.core.length, 72, 'srcDrive3.blobs.core length is correct')
+    t.is(srcDrive3.blobs.core.contiguousLength, 0, 'srcDrive3.blobs.core contiguous length is 0')
 
-    await srcDrive2.core.update({ wait: true })
-    t.is(srcDrive2.core.length, 7, 'srcDrive2.core length is correct')
-    t.is(srcDrive2.core.contiguousLength, 1, 'srcDrive2.core contiguous length is 1')
+    await srcDrive3.core.update({ wait: true })
+    t.is(srcDrive3.core.length, 7, 'srcDrive3.core length is correct')
+    t.is(srcDrive3.core.contiguousLength, 1, 'srcDrive3.core contiguous length is 1')
 
-    const { request } = await multisig2
+    const { request } = await multisig3
       .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
       .done()
     const reqStr = z32.encode(request)
 
-    const { result } = await multisig2
-      .verifyDrive(publicKeys, namespace, srcDrive2, reqStr, [], { minPeers: 1 })
+    const { result } = await multisig3
+      .verifyDrive(publicKeys, namespace, srcDrive3, reqStr, [])
       .done()
 
-    t.is(result.db.batch.length, srcDrive2.core.length, 'db batch length is correct')
-    t.is(result.blobs.batch.length, srcDrive2.blobs.core.length, 'blobs batch length is correct')
-    t.ok(await srcDrive2.core.has(0), 'srcDrive2 has block 0')
-    t.absent(await srcDrive2.core.has(1), 'srcDrive2 does not have block 1')
-    t.absent(await srcDrive2.core.has(2), 'srcDrive2 does not have block 2')
-    t.ok(await srcDrive2.core.has(3), 'srcDrive2 downloaded block 3 in verifyCoreCommittable')
-    t.ok(await srcDrive2.core.has(4, 7), 'srcDrive2 downloaded blocks 4, 5, 6 in createUpdateBatch')
+    t.is(result.db.batch.length, srcDrive3.core.length, 'db batch length is correct')
+    t.is(result.blobs.batch.length, srcDrive3.blobs.core.length, 'blobs batch length is correct')
+    t.ok(await srcDrive3.core.has(0), 'srcDrive3 has block 0')
+    t.absent(await srcDrive3.core.has(1), 'srcDrive3 does not have block 1')
+    t.absent(await srcDrive3.core.has(2), 'srcDrive3 does not have block 2')
+    t.ok(await srcDrive3.core.has(3), 'srcDrive3 downloaded block 3 in verifyCoreCommittable')
+    t.ok(await srcDrive3.core.has(4, 7), 'srcDrive3 downloaded blocks 4, 5, 6 in createUpdateBatch')
   }
 })
 
