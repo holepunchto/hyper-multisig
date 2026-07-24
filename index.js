@@ -159,7 +159,8 @@ class HyperMultisig {
       this.swarm.join(core.discoveryKey, { client: true, server: swarmAsServer })
 
       let startLength = start
-      if (skipTargetChecks && start === null) {
+      if (!force && !skipTargetChecks && start === null) {
+        // no peer on first commit
         await peerAdd
         await core.update({ wait: true })
         startLength = core.length
@@ -193,7 +194,8 @@ class HyperMultisig {
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
       peerUpdateTimeout,
-      minFullCopies = 2
+      minFullCopies = 2,
+      minPeers
     } = {}
   ) {
     return new HyperMultisigRunner(async (runner) => {
@@ -210,7 +212,7 @@ class HyperMultisig {
 
       let startLength = start
       let blobsStartLength = blobsStart
-      if (!skipTargetChecks && (startLength === null || blobsStartLength === null)) {
+      if (!force && !skipTargetChecks) {
         if (startLength === null) {
           await peerAdd
           await core.update({ wait: true })
@@ -239,7 +241,8 @@ class HyperMultisig {
           skipTargetChecks,
           skipTargetWellSeeded,
           peerUpdateTimeout,
-          minFullCopies
+          minFullCopies,
+          minPeers
         }
       )
     })
@@ -300,7 +303,8 @@ class HyperMultisig {
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
       peerUpdateTimeout,
-      minFullCopies = 2
+      minFullCopies = 2,
+      minPeers
     } = {}
   ) {
     return new HyperMultisigRunner(async (runner) => {
@@ -329,7 +333,8 @@ class HyperMultisig {
           skipTargetChecks,
           skipTargetWellSeeded,
           peerUpdateTimeout,
-          minFullCopies
+          minFullCopies,
+          minPeers
         }
       )
     })
@@ -420,7 +425,8 @@ class HyperMultisig {
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
       peerUpdateTimeout,
-      minFullCopies = 2
+      minFullCopies = 2,
+      minPeers
     } = {}
   ) {
     const { length, treeHash, content } = SignRequest.decode(z32.decode(request))
@@ -432,12 +438,14 @@ class HyperMultisig {
         skipTargetChecks,
         skipTargetWellSeeded,
         peerUpdateTimeout,
+        minPeers,
         coreId: 'db'
       })
       await verifyCoreCommittable(srcDrive.blobs.core, blobsCore, blobsLength, content.treeHash, {
         skipTargetChecks,
         skipTargetWellSeeded,
         peerUpdateTimeout,
+        minPeers,
         coreId: 'blobs'
       })
     }
