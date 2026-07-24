@@ -939,8 +939,19 @@ test('commit core multiple times', async (t) => {
 test('verify core', async (t) => {
   t.timeout(120000)
 
-  const { store, store2, swarm, swarm2, multisig, multisig2, signers, publicKeys, namespace } =
-    await setupTest(t, 2)
+  const {
+    store,
+    store2,
+    store3,
+    swarm,
+    swarm2,
+    swarm3,
+    multisig,
+    multisig3,
+    signers,
+    publicKeys,
+    namespace
+  } = await setupTest(t, 3)
 
   const srcCore = store.get({ name: 'srcCore' })
   t.teardown(() => srcCore.close())
@@ -950,6 +961,7 @@ test('verify core', async (t) => {
   await srcCore.append(b4a.from('1'))
   await srcCore.append(b4a.from('2'))
 
+  let coreKey
   // first commit
   {
     const { manifest, request } = await multisig
@@ -963,40 +975,53 @@ test('verify core', async (t) => {
       .commitCore(publicKeys, namespace, srcCore, reqStr, responses, { force: true })
       .done()
     t.is(core.length, srcCore.length, 'core length is updated')
+    coreKey = core.key
   }
+
+  const tgtCore2 = store2.get({ key: coreKey })
+  t.teardown(() => tgtCore2.close())
+  await tgtCore2.ready()
+  swarm2.join(tgtCore2.discoveryKey)
+  await tgtCore2.download({ start: 0, end: srcCore.length }).done()
 
   await srcCore.append(b4a.from('3'))
   await srcCore.append(b4a.from('4'))
   await srcCore.append(b4a.from('5'))
 
+  const srcCore2 = store2.get({ key: srcCore.key })
+  t.teardown(() => srcCore2.close())
+  await srcCore2.ready()
+  swarm2.join(srcCore2.discoveryKey)
+  await srcCore2.download({ start: 0, end: srcCore.length }).done()
+
   // verify second commit, only download partial blocks from the source core
   {
-    const srcCore2 = store2.get({ key: srcCore.key })
-    t.teardown(() => srcCore2.close())
-    await srcCore2.ready()
-    swarm2.join(srcCore2.discoveryKey)
-    await once(srcCore2, 'peer-add')
-    await srcCore2.update({ wait: true })
-    t.is(srcCore2.length, 6, 'srcCore2 length is correct')
-    t.is(srcCore2.contiguousLength, 0, 'srcCore2 contiguous length is 0')
+    const srcCore3 = store3.get({ key: srcCore.key })
+    t.teardown(() => srcCore3.close())
+    await srcCore3.ready()
+    swarm3.join(srcCore3.discoveryKey)
+    await once(srcCore3, 'peer-add')
+    await srcCore3.update({ wait: true })
+    t.is(srcCore3.length, 6, 'srcCore2 length is correct')
+    t.is(srcCore3.contiguousLength, 0, 'srcCore2 contiguous length is 0')
 
-    const { request } = await multisig2
+    const { request } = await multisig3
       .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
       .done()
     const reqStr = z32.encode(request)
 
-    const { result } = await multisig2
-      .verifyCore(publicKeys, namespace, srcCore2, reqStr, [], { minPeers: 1 })
+    const { result } = await multisig3
+      .verifyCore(publicKeys, namespace, srcCore3, reqStr, [])
       .done()
 
-    t.is(result.batch.length, srcCore2.length, 'batch length is correct')
-    t.absent(await srcCore2.has(0), 'srcCore2 does not have block 0')
-    t.absent(await srcCore2.has(1), 'srcCore2 does not have block 1')
+    t.is(result.batch.length, srcCore3.length, 'batch length is correct')
+    t.absent(await srcCore3.has(0), 'srcCore2 does not have block 0')
+    t.absent(await srcCore3.has(1), 'srcCore2 does not have block 1')
     t.ok(
-      await srcCore2.has(2),
+      await srcCore3.has(2),
       'srcCore2 downloaded block 2 at srcCore.treeHash in verifyCoreCommittable'
     )
-    t.ok(await srcCore2.has(3, 6), 'srcCore2 downloaded blocks 3, 4, 5 in createUpdateBatch')
+    t.ok(await srcCore3.has(3, 6), 'srcCore2 downloaded blocks 3, 4, 5 in createUpdateBatch')
   }
 })
 
