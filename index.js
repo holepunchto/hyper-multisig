@@ -161,7 +161,7 @@ class HyperMultisig {
       let startLength = start
       if (!force && !skipTargetChecks && start === null) {
         // no peer on first commit
-        await peerAdd
+        if (!core.peers.length) await peerAdd
         await core.update({ wait: true })
         startLength = core.length
       }
@@ -214,12 +214,12 @@ class HyperMultisig {
       let blobsStartLength = blobsStart
       if (!force && !skipTargetChecks) {
         if (startLength === null) {
-          await peerAdd
+          if (!core.peers.length) await peerAdd
           await core.update({ wait: true })
           startLength = core.length
         }
         if (blobsStartLength === null) {
-          await peerAddBlobs
+          if (!blobsCore.peers.length) await peerAddBlobs
           await blobsCore.update({ wait: true })
           blobsStartLength = blobsCore.length
         }
