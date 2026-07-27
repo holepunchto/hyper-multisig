@@ -943,16 +943,18 @@ test('commit core dry-run with start', async (t) => {
     store,
     store2,
     store3,
+    store4,
     swarm,
     swarm2,
     swarm3,
+    swarm4,
     multisig,
     multisig2,
     multisig3,
     signers,
     publicKeys,
     namespace
-  } = await setupTest(t, 3)
+  } = await setupTest(t, 4)
 
   const srcCore = store.get({ name: 'srcCore' })
   t.teardown(() => srcCore.close())
@@ -962,6 +964,8 @@ test('commit core dry-run with start', async (t) => {
   await srcCore.append(b4a.from('1'))
   await srcCore.append(b4a.from('2'))
 
+  let coreKey
+  // first commit
   {
     const { manifest, request } = await multisig
       .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
@@ -975,11 +979,24 @@ test('commit core dry-run with start', async (t) => {
       .done()
     t.is(result.destCore.length, srcCore.length, 'core length is correct')
     t.is(core.length, srcCore.length, 'core length is updated')
+    coreKey = core.key
   }
+
+  const tgtCore4 = store4.get({ key: coreKey })
+  t.teardown(() => tgtCore4.close())
+  await tgtCore4.ready()
+  swarm4.join(tgtCore4.discoveryKey)
+  await tgtCore4.download({ start: 0, end: srcCore.length }).done()
 
   await srcCore.append(b4a.from('3'))
   await srcCore.append(b4a.from('4'))
   await srcCore.append(b4a.from('5'))
+
+  const srcCore4 = store4.get({ key: srcCore.key })
+  t.teardown(() => srcCore4.close())
+  await srcCore4.ready()
+  swarm4.join(srcCore4.discoveryKey)
+  await srcCore4.download({ start: 0, end: srcCore.length }).done()
 
   // without start, it will download all blocks from the source core
   {
@@ -994,12 +1011,11 @@ test('commit core dry-run with start', async (t) => {
     t.is(srcCore2.contiguousLength, 0, 'srcCore2 contiguous length is 0')
 
     const { request } = await multisig2
-      .requestCore(publicKeys, namespace, srcCore2, srcCore2.length, { force: true })
+      .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
       .done()
     const reqStr = z32.encode(request)
     await multisig2
       .commitCore(publicKeys, namespace, srcCore2, reqStr, [], {
-        force: true,
         dryRun: true
       })
       .done()
@@ -1019,19 +1035,21 @@ test('commit core dry-run with start', async (t) => {
     t.is(srcCore3.contiguousLength, 0, 'srcCore3 contiguous length is 0')
 
     const { request } = await multisig3
-      .requestCore(publicKeys, namespace, srcCore3, srcCore3.length, { force: true })
+      .requestCore(publicKeys, namespace, srcCore, srcCore.length, { force: true })
       .done()
     const reqStr = z32.encode(request)
     await multisig3
       .commitCore(publicKeys, namespace, srcCore3, reqStr, [], {
-        force: true,
         dryRun: true,
         start: 3
       })
       .done()
     t.absent(await srcCore3.has(0), 'srcCore3 does not have block 0')
     t.absent(await srcCore3.has(1), 'srcCore3 does not have block 1')
-    t.absent(await srcCore3.has(2), 'srcCore3 does not have block 2')
+    t.ok(
+      await srcCore3.has(2),
+      'srcCore3 downloaded block 2 at srcCore.treeHash in verifyCoreCommittable'
+    )
     t.ok(await srcCore3.has(3, 6), 'srcCore3 has blocks 3, 4, 5')
   }
 })
@@ -1440,16 +1458,18 @@ test('commit drive dry-run with start', async (t) => {
     store,
     store2,
     store3,
+    store4,
     swarm,
     swarm2,
     swarm3,
+    swarm4,
     multisig,
     multisig2,
     multisig3,
     signers,
     publicKeys,
     namespace
-  } = await setupTest(t, 3)
+  } = await setupTest(t, 4)
 
   const srcDrive = new Hyperdrive(store)
   t.teardown(() => srcDrive.close())
@@ -1459,6 +1479,9 @@ test('commit drive dry-run with start', async (t) => {
   await srcDrive.put('/file1', b4a.alloc(65536 * 8))
   await srcDrive.put('/file2', b4a.alloc(65536 * 12))
 
+  let coreKey
+  let blobsKey
+  // first commit
   {
     const { manifest, request } = await multisig
       .requestDrive(publicKeys, namespace, srcDrive, srcDrive.version, { force: true })
@@ -1473,11 +1496,33 @@ test('commit drive dry-run with start', async (t) => {
     t.is(result.db.destCore.length, srcDrive.core.length, 'core length is correct')
     t.is(core.length, srcDrive.core.length, 'core length is updated')
     t.is(blobsCore.length, srcDrive.blobs.core.length, 'blobsCore length is updated')
+    coreKey = core.key
+    blobsKey = blobsCore.key
   }
+
+  const tgtCore4 = store4.get({ key: coreKey })
+  t.teardown(() => tgtCore4.close())
+  await tgtCore4.ready()
+  swarm4.join(tgtCore4.discoveryKey)
+  await tgtCore4.download({ start: 0, end: srcDrive.core.length }).done()
+
+  const tgtBlobs4 = store4.get({ key: blobsKey })
+  t.teardown(() => tgtBlobs4.close())
+  await tgtBlobs4.ready()
+  swarm4.join(tgtBlobs4.discoveryKey)
+  await tgtBlobs4.download({ start: 0, end: srcDrive.blobs.core.length }).done()
 
   await srcDrive.put('/file3', b4a.alloc(65536 * 12))
   await srcDrive.put('/file4', b4a.alloc(65536 * 16))
   await srcDrive.put('/file5', b4a.alloc(65536 * 20))
+
+  const srcDrive4 = new Hyperdrive(store4, srcDrive.key)
+  t.teardown(() => srcDrive4.close())
+  await srcDrive4.ready()
+  swarm4.join(srcDrive4.discoveryKey)
+  await srcDrive4.getBlobs()
+  await srcDrive4.core.download({ start: 0, end: srcDrive.core.length }).done()
+  await srcDrive4.blobs.core.download({ start: 0, end: srcDrive.blobs.core.length }).done()
 
   // without start, it will download all blocks from the source drive
   {
@@ -1501,7 +1546,6 @@ test('commit drive dry-run with start', async (t) => {
     const reqStr = z32.encode(request)
     await multisig2
       .commitDrive(publicKeys, namespace, srcDrive2, reqStr, [], {
-        force: true,
         dryRun: true
       })
       .done()
@@ -1530,7 +1574,6 @@ test('commit drive dry-run with start', async (t) => {
     const reqStr = z32.encode(request)
     await multisig3
       .commitDrive(publicKeys, namespace, srcDrive3, reqStr, [], {
-        force: true,
         dryRun: true,
         start: 4,
         blobsStart: 24
@@ -1539,7 +1582,7 @@ test('commit drive dry-run with start', async (t) => {
     t.ok(await srcDrive3.core.has(0), 'srcDrive3 has block 0')
     t.absent(await srcDrive3.core.has(1), 'srcDrive3 does not have block 1')
     t.absent(await srcDrive3.core.has(2), 'srcDrive3 does not have block 2')
-    t.absent(await srcDrive3.core.has(3), 'srcDrive3 does not have block 3')
+    t.ok(await srcDrive3.core.has(3), 'srcDrive3 downloaded block 3 in verifyCoreCommittable')
     t.ok(await srcDrive3.core.has(4, 7), 'srcDrive3 has blocks 4, 5, 6')
   }
 })
