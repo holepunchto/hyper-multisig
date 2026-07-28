@@ -146,7 +146,6 @@ class HyperMultisig {
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
       peerUpdateTimeout,
-      minFullCopies = 2,
       minPeers
     } = {}
   ) {
@@ -155,13 +154,12 @@ class HyperMultisig {
       this.swarm.join(srcCore.discoveryKey, { client: true, server: false })
 
       const { manifest, core } = await this.createCore(publicKeys, namespace, { quorum })
-      const peerAdd = once(core, 'peer-add')
       this.swarm.join(core.discoveryKey, { client: true, server: swarmAsServer })
 
       let startLength = start
       if (!force && !skipTargetChecks && start === null) {
         // no peer on first commit
-        if (!core.peers.length) await peerAdd
+        if (!core.peers.length) await once(core, 'peer-add')
         await core.update({ wait: true })
         startLength = core.length
       }
@@ -173,7 +171,6 @@ class HyperMultisig {
         skipTargetChecks,
         skipTargetWellSeeded,
         peerUpdateTimeout,
-        minFullCopies,
         minPeers
       })
     })
@@ -194,7 +191,6 @@ class HyperMultisig {
       skipTargetChecks = false,
       skipTargetWellSeeded = false,
       peerUpdateTimeout,
-      minFullCopies = 2,
       minPeers
     } = {}
   ) {
@@ -206,20 +202,18 @@ class HyperMultisig {
       const { manifest, core, blobsCore } = await this.createDrive(publicKeys, namespace, {
         quorum
       })
-      const peerAdd = once(core, 'peer-add')
-      const peerAddBlobs = once(blobsCore, 'peer-add')
       this.swarm.join(core.discoveryKey, { client: true, server: swarmAsServer })
 
       let startLength = start
       let blobsStartLength = blobsStart
       if (!force && !skipTargetChecks) {
         if (startLength === null) {
-          if (!core.peers.length) await peerAdd
+          if (!core.peers.length) await once(core, 'peer-add')
           await core.update({ wait: true })
           startLength = core.length
         }
         if (blobsStartLength === null) {
-          if (!blobsCore.peers.length) await peerAddBlobs
+          if (!blobsCore.peers.length) await once(blobsCore, 'peer-add')
           await blobsCore.update({ wait: true })
           blobsStartLength = blobsCore.length
         }
@@ -241,7 +235,6 @@ class HyperMultisig {
           skipTargetChecks,
           skipTargetWellSeeded,
           peerUpdateTimeout,
-          minFullCopies,
           minPeers
         }
       )
