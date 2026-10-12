@@ -835,12 +835,19 @@ test('commit core', async (t) => {
   const commitCore = multisig.commitCore(publicKeys, namespace, srcCore, reqStr, responses, {
     force: true
   })
+  const progress = []
+  commitCore.on('commit-progress', (p) => progress.push(p))
 
   const { core, result } = await commitCore.done()
 
   t.is(idEnc.normalize(core.key), result.destCore.key)
   t.is(core.key.toString('hex'), result.destCore.keyHex)
   t.is(result.destCore.length, srcCore.length, 'core length is correct')
+  t.alike(
+    progress,
+    [0, 1, 2].map((idx) => ({ start: 0, end: 3, idx })),
+    'commit-progress emitted for each block added to the batch'
+  )
 })
 
 test('commit core with swarmAsServer false', async (t) => {
@@ -1010,11 +1017,18 @@ test('verify core', async (t) => {
       .done()
     const reqStr = z32.encode(request)
 
+    const progress = []
     const { result } = await multisig3
       .verifyCore(publicKeys, namespace, srcCore3, reqStr, [])
+      .on('commit-progress', (p) => progress.push(p))
       .done()
 
     t.is(result.batch.length, srcCore3.length, 'batch length is correct')
+    t.alike(
+      progress,
+      [3, 4, 5].map((idx) => ({ start: 3, end: 6, idx })),
+      'commit-progress emitted for blocks 3, 4, 5'
+    )
     t.absent(await srcCore3.has(0), 'srcCore2 does not have block 0')
     t.absent(await srcCore3.has(1), 'srcCore2 does not have block 1')
     t.ok(
@@ -1500,12 +1514,26 @@ test('commit drive', async (t) => {
   const responses = await Promise.all(
     signers.slice(0, manifest.quorum).map((signer) => signResponse(request, signer))
   )
+  const progress = []
+  const blobsProgress = []
   const { result } = await multisig
     .commitDrive(publicKeys, namespace, srcDrive, reqStr, responses, {
       force: true
     })
+    .on('commit-progress', (p) => progress.push(p))
+    .on('commit-blobs-progress', (p) => blobsProgress.push(p))
     .done()
   t.is(result.db.destCore.length, srcDrive.core.length, 'core length is correct')
+  t.alike(
+    progress,
+    [0, 1, 2, 3].map((idx) => ({ start: 0, end: 4, idx })),
+    'commit-progress emitted for each db block'
+  )
+  t.alike(
+    blobsProgress,
+    [0, 1, 2].map((idx) => ({ start: 0, end: 3, idx })),
+    'commit-blobs-progress emitted for each blobs block'
+  )
 })
 
 test('commit drive multiple times', async (t) => {
@@ -1630,12 +1658,26 @@ test('verify drive', async (t) => {
       .done()
     const reqStr = z32.encode(request)
 
+    const progress = []
+    const blobsProgress = []
     const { result } = await multisig3
       .verifyDrive(publicKeys, namespace, srcDrive3, reqStr, [])
+      .on('commit-progress', (p) => progress.push(p))
+      .on('commit-blobs-progress', (p) => blobsProgress.push(p))
       .done()
 
     t.is(result.db.batch.length, srcDrive3.core.length, 'db batch length is correct')
     t.is(result.blobs.batch.length, srcDrive3.blobs.core.length, 'blobs batch length is correct')
+    t.alike(
+      progress,
+      [4, 5, 6].map((idx) => ({ start: 4, end: 7, idx })),
+      'commit-progress emitted for db blocks 4, 5, 6'
+    )
+    t.alike(
+      blobsProgress,
+      Array.from({ length: 72 - 24 }, (_, i) => ({ start: 24, end: 72, idx: 24 + i })),
+      'commit-blobs-progress emitted for blobs blocks 24-71'
+    )
     t.ok(await srcDrive3.core.has(0), 'srcDrive3 has block 0')
     t.absent(await srcDrive3.core.has(1), 'srcDrive3 does not have block 1')
     t.absent(await srcDrive3.core.has(2), 'srcDrive3 does not have block 2')
