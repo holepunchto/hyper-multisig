@@ -845,7 +845,7 @@ test('commit core', async (t) => {
   t.is(result.destCore.length, srcCore.length, 'core length is correct')
   t.alike(
     progress,
-    [0, 1, 2].map((idx) => ({ start: 0, end: 3, idx })),
+    [1, 2, 3].map((processed) => ({ processed, total: 3 })),
     'commit-progress emitted for each block added to the batch'
   )
 })
@@ -1026,8 +1026,8 @@ test('verify core', async (t) => {
     t.is(result.batch.length, srcCore3.length, 'batch length is correct')
     t.alike(
       progress,
-      [3, 4, 5].map((idx) => ({ start: 3, end: 6, idx })),
-      'commit-progress emitted for blocks 3, 4, 5'
+      [1, 2, 3].map((processed) => ({ processed, total: 3 })),
+      'commit-progress emitted for the 3 new blocks'
     )
     t.absent(await srcCore3.has(0), 'srcCore2 does not have block 0')
     t.absent(await srcCore3.has(1), 'srcCore2 does not have block 1')
@@ -1526,12 +1526,12 @@ test('commit drive', async (t) => {
   t.is(result.db.destCore.length, srcDrive.core.length, 'core length is correct')
   t.alike(
     progress,
-    [0, 1, 2, 3].map((idx) => ({ start: 0, end: 4, idx })),
+    [1, 2, 3, 4].map((processed) => ({ processed, total: 4 })),
     'commit-progress emitted for each db block'
   )
   t.alike(
     blobsProgress,
-    [0, 1, 2].map((idx) => ({ start: 0, end: 3, idx })),
+    [1, 2, 3].map((processed) => ({ processed, total: 3 })),
     'commit-blobs-progress emitted for each blobs block'
   )
 })
@@ -1670,13 +1670,13 @@ test('verify drive', async (t) => {
     t.is(result.blobs.batch.length, srcDrive3.blobs.core.length, 'blobs batch length is correct')
     t.alike(
       progress,
-      [4, 5, 6].map((idx) => ({ start: 4, end: 7, idx })),
-      'commit-progress emitted for db blocks 4, 5, 6'
+      [1, 2, 3].map((processed) => ({ processed, total: 3 })),
+      'commit-progress emitted for the 3 new db blocks'
     )
     t.alike(
       blobsProgress,
-      Array.from({ length: 72 - 24 }, (_, i) => ({ start: 24, end: 72, idx: 24 + i })),
-      'commit-blobs-progress emitted for blobs blocks 24-71'
+      Array.from({ length: 48 }, (_, i) => ({ processed: i + 1, total: 48 })),
+      'commit-blobs-progress emitted for the 48 new blobs blocks'
     )
     t.ok(await srcDrive3.core.has(0), 'srcDrive3 has block 0')
     t.absent(await srcDrive3.core.has(1), 'srcDrive3 does not have block 1')
