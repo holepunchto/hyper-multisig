@@ -101,13 +101,14 @@ The runner emits events during the commit process:
 
 - `'verify-committable-start'` - fired with `(srcCoreKey, destCoreKey)`
 - `'commit-start'` - fired when the commit begins
+- `'commit-progress'` - fired with `({ processed, total })` each time a block is added to the batch, where `total` is the number of blocks in the batch
 - `'verify-committed-start'` - fired with `(destCoreKey)` after the commit completes
 
 #### `const runner = multisig.commitDrive(publicKeys, namespace, srcDrive, request, responses, [options])`
 
 Commit signed data to a multisig drive.
 
-Same parameters and options as `commitCore`, but takes a Hyperdrive instead of a Hypercore.
+Same parameters and options as `commitCore`, but takes a Hyperdrive instead of a Hypercore. `'commit-progress'` fires for the db core blocks, and `'commit-blobs-progress'` fires with the same `({ processed, total })` for the blobs core blocks.
 
 Call `await runner.done()` to get `{ manifest, core, blobsCore, quorum, result }`.
 

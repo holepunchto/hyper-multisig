@@ -385,7 +385,8 @@ class HyperMultisig {
     const batch = await signCore(core, srcCore, signatures, {
       start,
       length,
-      commit: !dryRun
+      commit: !dryRun,
+      onProgress: (progress) => runner.emit('commit-progress', progress)
     })
 
     if (!force && !dryRun) {
@@ -471,7 +472,15 @@ class HyperMultisig {
       blobsCore,
       srcDrive.blobs.core,
       blobsSignatures,
-      { start, length, blobsStart, blobsLength, commit: !dryRun }
+      {
+        start,
+        length,
+        blobsStart,
+        blobsLength,
+        commit: !dryRun,
+        onProgress: (progress) => runner.emit('commit-progress', progress),
+        onBlobsProgress: (progress) => runner.emit('commit-blobs-progress', progress)
+      }
     )
 
     if (!force && !dryRun) {
